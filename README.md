@@ -39,7 +39,7 @@ A Spicetify extension that lets you stream and download unreleased Juice WRLD tr
 ## Credits
 
 - API provided by [juicevault.xyz](https://api.juicevault.xyz/docs)
-- API & Extension created by AjaxFNC, project base created by prototbh
+- API & Extension created by AjaxFNC, Juice archive/files provided by Rubixo, and project base created by prototbh.
 
 
 
@@ -50,3 +50,4 @@ A Spicetify extension that lets you stream and download unreleased Juice WRLD tr
 
 
 ### This is a fan-made project made with 💜 for Juice WRLD. Not affiliated with Grade A Productions or Spotify.
+
