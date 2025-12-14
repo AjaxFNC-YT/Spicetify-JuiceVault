@@ -1,0 +1,25 @@
+{
+    "name": "JuiceVault",
+    "description": "Stream and download unreleased Juice WRLD music directly in Spotify. Access 1.4k+ vault songs with an integrated player, search, and download functionality.",
+    "preview": "preview.png",
+    "main": "JuiceVault.js",
+    "readme": "README.md",
+    "authors": [
+        {
+            "name": "ajaxfnc",
+            "url": "https://github.com/AjaxFNC-YT"
+        },
+        {
+            "name": "prototbh",
+            "url": "https://github.com/prototbh"
+        }
+    ],
+    "tags": [
+        "juice-wrld",
+        "unreleased",
+        "music",
+        "player",
+        "vault",
+        "emo-rap"
+    ]
+}
