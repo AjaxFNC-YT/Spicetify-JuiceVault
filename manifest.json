@@ -6,11 +6,15 @@
     "readme": "README.md",
     "authors": [
         {
-            "name": "ajaxfnc",
+            "name": "AjaxFNC",
             "url": "https://github.com/AjaxFNC-YT"
         },
         {
-            "name": "prototbh",
+            "name": "Rubixo",
+            "url": ""
+        },
+        {
+            "name": "Prototbh",
             "url": "https://github.com/prototbh"
         }
     ],
@@ -22,4 +26,5 @@
         "vault",
         "emo-rap"
     ]
+
 }
