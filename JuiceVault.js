@@ -806,7 +806,7 @@
                         <button class="jv-close-btn" id="jv-close">✕</button>
                     </div>
                 </div>
-                <div class="jv-content" id="jv-song-list"><div style="width:100%; text-align:center; color:var(--spice-subtext); padding-top: 50px;">Loading 1.5k+ Songs...</div></div>
+                <div class="jv-content" id="jv-song-list"><div style="width:100%; text-align:center; color:var(--spice-subtext); padding-top: 50px;">Loading 1.4k+ Songs...</div></div>
                 <div class="jv-player">
                     <div class="jv-player-left">
                         <img src="${defaultCoverSVG}" class="jv-np-img clickable" id="jv-np-img" title="Click to view full size">
