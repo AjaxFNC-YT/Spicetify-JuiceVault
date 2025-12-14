@@ -48,6 +48,18 @@
         }
         @keyframes jv-fade-in { to { opacity: 1; } }
 
+        /* Loading Spinner */
+        .jv-loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255,255,255,0.2);
+            border-top-color: #c0392b;
+            border-radius: 50%;
+            animation: jv-spin 0.8s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes jv-spin { to { transform: rotate(360deg); } }
+
         .jv-window, .jv-window * {
             box-sizing: border-box; 
             font-family: var(--spice-font-description, inherit); 
@@ -620,27 +632,50 @@
 
     function debounce(func, wait) { let timeout; return function (...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), wait); }; }
 
+    let isLoading = false;
+
     async function searchVault(query) {
         if (!query) { loadSongs(); return; }
         try {
-            const res = await fetch(`${API_URL}/music/search?q=${encodeURIComponent(query)}`);
+            isLoading = true;
+            showLoading();
+            // Sanitize query - remove problematic chars that might break API
+            const safeQuery = query.replace(/['']/g, "'").trim();
+            const res = await fetch(`${API_URL}/music/search?q=${encodeURIComponent(safeQuery)}`);
             const data = await res.json();
             vaultSongs = data.results || [];
             displayCount = CHUNK_SIZE;
+            isLoading = false;
             renderGallery();
-        } catch (e) { console.error("Search Error:", e); }
+        } catch (e) {
+            console.error("Search Error:", e);
+            isLoading = false;
+            const container = document.getElementById('jv-song-list');
+            if (container) container.innerHTML = `<div style="width:100%; text-align:center; padding-top:50px;"><div style="color:rgba(255,255,255,0.6);">Search failed. Try again.</div></div>`;
+        }
+    }
+
+    function showLoading() {
+        const container = document.getElementById('jv-song-list');
+        if (container) {
+            container.innerHTML = `<div style="width:100%; text-align:center; padding-top:80px;">
+                <div class="jv-loading-spinner"></div>
+                <div style="color:rgba(255,255,255,0.6); margin-top:16px;">Searching...</div>
+            </div>`;
+        }
     }
 
     function renderGallery() {
         const container = document.getElementById('jv-song-list');
         if (!container) return;
+        if (isLoading) return; // Don't render while loading
         if (displayCount === CHUNK_SIZE) { container.innerHTML = ""; container.scrollTop = 0; }
         if (container.children.length === 1 && container.innerText.includes("Loading")) container.innerHTML = "";
 
         const currentCount = container.children.length;
         const toRender = vaultSongs.slice(currentCount, displayCount);
         if (vaultSongs.length === 0 && displayCount === CHUNK_SIZE) {
-            container.innerHTML = `<div style="width:100%; text-align:center; padding-top:50px;"><div style="color:var(--spice-subtext);">No results found.</div></div>`;
+            container.innerHTML = `<div style="width:100%; text-align:center; padding-top:50px;"><div style="color:rgba(255,255,255,0.6);">No results found.</div></div>`;
             return;
         }
 
