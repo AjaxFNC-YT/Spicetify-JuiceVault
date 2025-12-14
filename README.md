@@ -17,7 +17,7 @@ A Spicetify extension that lets you stream and download unreleased Juice WRLD tr
 
 ### Via Spicetify Marketplace (Recommended)
 1. Open Spicetify Marketplace
-2. Search for "JuiceVault"
+2. Search for "JuiceVault" (you may need to click a view more button)
 3. Click Install
 
 ### Manual Installation
@@ -40,6 +40,7 @@ A Spicetify extension that lets you stream and download unreleased Juice WRLD tr
 
 - API provided by [juicevault.xyz](https://api.juicevault.xyz/docs)
 - API & Extension created by AjaxFNC, project base created by prototbh
+
 
 
 
