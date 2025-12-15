@@ -3,6 +3,7 @@
     "description": "Stream and download unreleased Juice WRLD music directly in Spotify. Access 1.4k+ vault songs with an integrated player, search, and download functionality.",
     "preview": "preview.png",
     "main": "JuiceVault.js",
+    "version": "1.1.0",
     "readme": "README.md",
     "authors": [
         {
@@ -28,4 +29,5 @@
     ]
 
 }
+
 
