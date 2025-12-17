@@ -2,35 +2,26 @@
 // AUTHOR: ajaxfnc
 // DESCRIPTION: JuiceVault - Access all unreleased Juice WRLD music directly in Spotify
 // VERSION: 1.10
-
 (function JuiceVault() {
-    // wait for fuckshit to load
     if (!Spicetify.Player || !Spicetify.Platform || !Spicetify.CosmosAsync || !Spicetify.Topbar) {
         setTimeout(JuiceVault, 300);
         return;
     }
-
-    // vars or som
     const API_URL = "https://api.juicevault.xyz";
     let vaultSongs = [];
     let displayCount = 100;
     const CHUNK_SIZE = 100;
-
     let audio = new Audio();
     audio.crossOrigin = "anonymous";
     let volumeInterval = null;
-
-    // Initialize EQ on first play so 0dB actually sounds like the original
     audio.addEventListener('play', function initEQOnce() {
         initEQ();
         connectAudioToEQ();
         if (audioContext?.state === 'suspended') audioContext.resume();
-        audio.removeEventListener('play', initEQOnce); // Only run once
+        audio.removeEventListener('play', initEQOnce);
     }, { once: true });
-
     let isModalOpen = false;
     let currentSong = null;
-
     const icon999 = `<img src="https://i.imgur.com/3p5oZqu.png" alt="Juice WRLD" style="width:24px;height:24px;"/>`;
     const defaultCoverSVG = `https://i.imgur.com/trvHJ1w.png`;
     const iconVolume = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>`;
@@ -42,20 +33,18 @@
     const iconEQ = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>`;
     const iconSettings = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
     const iconChangelog = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>`;
-
+    const iconRepeat = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>`;
+    const iconRepeatOne = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"> <polyline points="17 1 21 5 17 9"></polyline> <path d="M3 11V9a4 4 0 0 1 4-4h14"></path> <polyline points="7 23 3 19 7 15"></polyline> <path d="M21 13v2a4 4 0 0 1-4 4H3"></path> <g stroke="none"> <circle cx="17" cy="7" r="7" fill="#FF4081"/> <rect x="16" y="4" width="2" height="7" fill="white"/> <path d="M16 4l-2 2" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/> </g> </svg>`;
     let isShuffled = false;
-    let isEQOpen = false;
-
-    // Settings with localStorage persistence
-    const defaultSettings = { hideEQ: false, hideShuffle: false, eqMax: 12, disableVolumeSync: false };
+    let repeatMode = 'off';
+    let playedSongs = new Set();
+    const defaultSettings = { hideEQ: false, hideShuffle: false, hideRepeat: false, eqMax: 12, disableVolumeSync: false };
     let settings = { ...defaultSettings };
     try {
         const saved = localStorage.getItem('juicevault-settings');
         if (saved) settings = { ...defaultSettings, ...JSON.parse(saved) };
     } catch (e) { }
     function saveSettings() { try { localStorage.setItem('juicevault-settings', JSON.stringify(settings)); } catch (e) { } }
-
-    // EQ state persistence
     const defaultEQState = { bass: 0, mid: 0, treble: 0, reverb: 0, gain: 0, distortion: 0, stereoWidth: 0 };
     let eqState = { ...defaultEQState };
     try {
@@ -63,17 +52,12 @@
         if (saved) eqState = { ...defaultEQState, ...JSON.parse(saved) };
     } catch (e) { }
     function saveEQState() { try { localStorage.setItem('juicevault-eq-state', JSON.stringify(eqState)); } catch (e) { } }
-
-    // Version tracking for auto-changelog
-    const CURRENT_VERSION = '1.1.0';
-
-
+    const CURRENT_VERSION = '1.2.0';
     const CHANGELOG = [
+        { version: '1.2.0', date: '2025-12-16', changes: ['Added Repeat/Repeat One functionality', 'Fixed dropdown in settings', 'Fixed search with special characters (HOPEFULLY)', 'Fixed Gain in EQ to work with the max dB setting.'] },
         { version: '1.1.0', date: '2025-12-14', changes: ['Added Equalizer with Bass/Mid/Treble/Reverb/Gain', 'Added Settings (Hide EQ, EQ up to 48dB, Hide Shuffle, Disable Volume Sync)', 'Added Changelog (and update detection)', 'Fixed search with special characters'] },
         { version: '1.0.0', date: '2025-12-13', changes: ['Initial release', 'Stream & download vault songs', 'Shuffle mode', 'Search functionality', 'Volume sync with Spotify'] }
     ];
-
-    // Web Audio API EQ Setup
     let audioContext = null;
     let sourceNode = null;
     let bassFilter = null;
@@ -85,31 +69,24 @@
     let stereoWidthNode = null;
     let analyserNode = null;
     let isAudioConnected = false;
-
     function initEQ() {
         if (audioContext) return;
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
-
-        // Create filters
         bassFilter = audioContext.createBiquadFilter();
         bassFilter.type = 'lowshelf';
         bassFilter.frequency.value = 200;
         bassFilter.gain.value = 0;
-
         midFilter = audioContext.createBiquadFilter();
         midFilter.type = 'peaking';
         midFilter.frequency.value = 1000;
         midFilter.Q.value = 1;
         midFilter.gain.value = 0;
-
         trebleFilter = audioContext.createBiquadFilter();
         trebleFilter.type = 'highshelf';
         trebleFilter.frequency.value = 3000;
         trebleFilter.gain.value = 0;
-
-        // Create reverb (ConvolverNode with generated impulse)
         reverbNode = audioContext.createConvolver();
-        const reverbTime = 2; // seconds
+        const reverbTime = 2;
         const sampleRate = audioContext.sampleRate;
         const length = sampleRate * reverbTime;
         const impulse = audioContext.createBuffer(2, length, sampleRate);
@@ -120,44 +97,30 @@
             }
         }
         reverbNode.buffer = impulse;
-
-        // Create dry/wet mixing for reverb
-        reverbNode.volume = 0; // Start at 0 (dry)
-
-        // Create distortion
+        reverbNode.volume = 0;
         distortionNode = audioContext.createWaveShaper();
-        distortionNode.curve = makeDistortionCurve(0); // Start at 0 (no distortion)
+        distortionNode.curve = makeDistortionCurve(0);
         distortionNode.oversample = '4x';
-
-        // Create stereo width control (using splitter/merger)
         stereoWidthNode = {
             splitter: audioContext.createChannelSplitter(2),
             merger: audioContext.createChannelMerger(2),
             leftGain: audioContext.createGain(),
             rightGain: audioContext.createGain(),
-            width: 0 // -100 to 100, 0 = normal stereo
+            width: 0
         };
         stereoWidthNode.leftGain.gain.value = 1;
         stereoWidthNode.rightGain.gain.value = 1;
-
-        // Create analyser for visualizer
         analyserNode = audioContext.createAnalyser();
         analyserNode.fftSize = 256;
         analyserNode.smoothingTimeConstant = 0.8;
-
-        // Create master gain
         masterGainNode = audioContext.createGain();
         masterGainNode.gain.value = 1.0;
-
-        // Apply saved EQ state
         if (bassFilter) bassFilter.gain.value = eqState.bass;
         if (midFilter) midFilter.gain.value = eqState.mid;
         if (trebleFilter) trebleFilter.gain.value = eqState.treble;
         if (distortionNode) distortionNode.curve = makeDistortionCurve(eqState.distortion);
         if (masterGainNode) masterGainNode.gain.value = 1 + (eqState.gain / 12);
     }
-
-    // Helper function to create distortion curve
     function makeDistortionCurve(amount) {
         const k = amount;
         const samples = 44100;
@@ -169,55 +132,37 @@
         }
         return curve;
     }
-
     function connectAudioToEQ() {
         if (isAudioConnected || !audioContext) return;
         try {
             sourceNode = audioContext.createMediaElementSource(audio);
-
-            // Main chain: source → bass → mid → treble → distortion
             sourceNode.connect(bassFilter);
             bassFilter.connect(midFilter);
             midFilter.connect(trebleFilter);
             trebleFilter.connect(distortionNode);
-
-            // Split for stereo width processing
             distortionNode.connect(stereoWidthNode.splitter);
             stereoWidthNode.splitter.connect(stereoWidthNode.leftGain, 0);
             stereoWidthNode.splitter.connect(stereoWidthNode.rightGain, 1);
             stereoWidthNode.leftGain.connect(stereoWidthNode.merger, 0, 0);
             stereoWidthNode.rightGain.connect(stereoWidthNode.merger, 0, 1);
-
-            // Dry path from merger
             const dryGain = audioContext.createGain();
             stereoWidthNode.merger.connect(dryGain);
             dryGain.connect(masterGainNode);
-
-            // Wet path (reverb)
             const wetGain = audioContext.createGain();
-            wetGain.gain.value = 0; // Start dry
+            wetGain.gain.value = 0;
             stereoWidthNode.merger.connect(reverbNode);
             reverbNode.connect(wetGain);
             wetGain.connect(masterGainNode);
-
-            // Store wet/dry gains for later control
             reverbNode._wetGain = wetGain;
             reverbNode._dryGain = dryGain;
-
-            // Apply saved reverb state
             wetGain.gain.value = eqState.reverb / 100;
-
-            // Connect analyser for visualizer
             masterGainNode.connect(analyserNode);
-
-            // Final output
             masterGainNode.connect(audioContext.destination);
             isAudioConnected = true;
         } catch (e) {
             console.error('EQ connection error:', e);
         }
     }
-
     const styles = `
         .jv-backdrop {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -231,8 +176,6 @@
             justify-content: center;
         }
         @keyframes jv-fade-in { to { opacity: 1; } }
-
-        /* Loading Spinner */
         .jv-loading-spinner {
             width: 40px;
             height: 40px;
@@ -243,16 +186,14 @@
             margin: 0 auto;
         }
         @keyframes jv-spin { to { transform: rotate(360deg); } }
-
         .jv-window, .jv-window * {
-            box-sizing: border-box; 
-            font-family: var(--spice-font-description, inherit); 
+            box-sizing: border-box;
+            font-family: var(--spice-font-description, inherit);
         }
-
         .jv-window {
             width: 90%;
-            height: 90vh; 
-            max-height: 950px; // increased slightly for more space
+            height: 90vh;
+            max-height: 950px;
             background: var(--spice-main, #121212);
             border-radius: 12px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.5);
@@ -261,7 +202,6 @@
             overflow: hidden;
             border: 1px solid rgba(255,255,255,0.1);
         }
-
         .jv-header {
             padding: 24px 32px;
             display: grid;
@@ -272,7 +212,6 @@
             flex-shrink: 0;
             gap: 20px;
         }
-
         .jv-search-container {
             width: 100%;
             justify-self: center;
@@ -304,7 +243,6 @@
             fill: var(--spice-subtext);
             pointer-events: none;
         }
-
         .jv-content {
             flex: 1;
             min-height: 0;
@@ -317,7 +255,6 @@
             justify-content: flex-start;
             scrollbar-color: rgba(255,255,255,0.3) transparent;
         }
-        
         .jv-content::-webkit-scrollbar {
             width: 14px !important;
             display: block !important;
@@ -334,7 +271,6 @@
         .jv-content::-webkit-scrollbar-thumb:hover {
             background-color: rgba(255, 255, 255, 0.5) !important;
         }
-        
         .jv-card {
             width: 180px;
             flex-shrink: 0;
@@ -353,7 +289,6 @@
             background: var(--spice-card-hover);
             transform: translateY(-4px);
         }
-        
         .jv-card-img-container {
             width: 100%;
             padding-top: 100%;
@@ -374,7 +309,6 @@
             transition: filter 0.2s;
         }
         .jv-card:hover .jv-card-img { filter: brightness(0.6); }
-        
         .jv-card-play-overlay {
             position: absolute;
             top: 50%;
@@ -395,7 +329,6 @@
         .jv-card-play-overlay svg { fill: #fff; width: 20px; height: 20px; margin-left: 2px; }
         .jv-card:hover .jv-card-play-overlay { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         .jv-card-play-overlay:hover { background: linear-gradient(135deg, #c0392b, #9b59b6); }
-        
         .jv-card-download {
             position: absolute;
             bottom: 8px;
@@ -416,7 +349,6 @@
         .jv-card-download svg { width: 14px; height: 14px; stroke: #fff; fill: none; }
         .jv-card:hover .jv-card-download { opacity: 1; }
         .jv-card-download:hover { background: linear-gradient(135deg, #c0392b, #9b59b6); transform: scale(1.1); }
-        
         .jv-card-info {
             display: flex;
             align-items: center;
@@ -434,7 +366,6 @@
             pointer-events: auto;
         }
         .jv-card-info .jv-card-download svg { width: 12px; height: 12px; }
-        
         .jv-card-title {
             font-size: 13px;
             font-weight: 700;
@@ -443,7 +374,6 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        
         .jv-card-bottom {
             display: flex;
             align-items: center;
@@ -465,13 +395,11 @@
         }
         .jv-card:hover .jv-card-bottom .jv-card-download { opacity: 1; }
         .jv-card-bottom .jv-card-download svg { width: 12px; height: 12px; }
-        
         .jv-card-artist {
             font-size: 11px;
             color: var(--spice-subtext);
             margin-top: -4px;
         }
-
         .jv-player {
             height: 90px;
             background: transparent;
@@ -483,38 +411,34 @@
             flex-shrink: 0;
             z-index: 10;
         }
-        
         .jv-player-left { display: flex; align-items: center; width: 30%; gap: 14px; }
         .jv-np-img { width: 56px; height: 56px; border-radius: 4px; object-fit: cover; background: #222; box-shadow: 0 2px 4px rgba(0,0,0,0.4); }
         .jv-np-info { display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
-
         .jv-player-center { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 40%; gap: 8px; }
-        .jv-controls { display: flex; align-items: center; justify-content: center; gap: 24px; margin-right: 5px; }
+        .jv-controls { display: flex; align-items: center; justify-content: center; gap: 16px; }
         .jv-btn-control { background: none; border: none; color: rgba(255,255,255,0.7); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: color 0.2s, transform 0.1s; }
         .jv-btn-control:hover { color: #fff; }
         .jv-btn-control:active { transform: scale(0.95); }
         .jv-btn-control.active { color: #c0392b; }
         .jv-btn-control svg { fill: currentColor; width: 16px; height: 16px; }
-
         .jv-play-main { width: 32px; height: 32px; border-radius: 50%; background: #fff; color: #121212; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s; }
         .jv-play-main:hover { transform: scale(1.1); }
         .jv-play-main svg { width: 16px; height: 16px; fill: currentColor; }
-
         .jv-progress-container { width: 100%; display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,0.7); font-size: 11px; font-variant-numeric: tabular-nums; position: relative; }
-        .jv-progress-bar { 
-            flex: 1; 
-            height: 4px; 
-            background: rgba(255,255,255,0.2); 
-            border-radius: 4px; 
-            position: relative; 
-            cursor: pointer; 
+        .jv-progress-bar {
+            flex: 1;
+            height: 4px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            position: relative;
+            cursor: pointer;
             overflow: visible;
         }
-        .jv-progress-fill { 
-            height: 100%; 
-            background: linear-gradient(to right, #c0392b, #9b59b6); 
-            width: 0%; 
-            border-radius: 4px; 
+        .jv-progress-fill {
+            height: 100%;
+            background: linear-gradient(to right, #c0392b, #9b59b6);
+            width: 0%;
+            border-radius: 4px;
             position: relative;
         }
         .jv-progress-fill::after {
@@ -531,7 +455,6 @@
             transition: transform 0.1s;
         }
         .jv-progress-bar:hover .jv-progress-fill::after { transform: translateY(-50%) scale(1.15); }
-
         .jv-player-right { width: 30%; display: flex; justify-content: flex-end; align-items: center; padding-right: 16px; gap: 10px; }
         .jv-download-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); color: var(--spice-text); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, transform 0.1s; }
         .jv-download-btn:hover { background: rgba(255,255,255,0.2); transform: scale(1.1); }
@@ -539,27 +462,26 @@
         .jv-player.disabled .jv-download-btn { opacity: 0.3; pointer-events: none; }
         .jv-volume-icon { color: rgba(255,255,255,0.7); display: flex; align-items: center; transition: color 0.2s; }
         .jv-player-right:hover .jv-volume-icon { color: var(--spice-text); }
-        .jv-volume-slider { 
-            -webkit-appearance: none; 
-            width: 100px; 
-            height: 4px; 
-            background: rgba(255,255,255,0.2); 
-            border-radius: 4px; 
-            outline: none; 
+        .jv-volume-slider {
+            -webkit-appearance: none;
+            width: 100px;
+            height: 4px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            outline: none;
             cursor: pointer;
         }
-        .jv-volume-slider::-webkit-slider-thumb { 
-            -webkit-appearance: none; 
-            width: 12px; 
-            height: 12px; 
-            border-radius: 50%; 
-            background: #fff; 
-            cursor: pointer; 
+        .jv-volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
             transition: transform 0.1s, box-shadow 0.1s;
         }
         .jv-volume-slider::-webkit-slider-thumb:hover { transform: scale(1.15); box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
-
         .jv-title { font-size: 24px; font-weight: 700; color: #fff; display: flex; gap: 12px; align-items: center; }
         .jv-pill { background: #fff; color: #121212; font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 800; }
         .jv-header-actions { display: flex; gap: 12px; align-items: center; justify-self: end; }
@@ -571,19 +493,13 @@
         .jv-icon-btn.active { opacity: 1; color: #c0392b; }
         .jv-close-btn { background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; opacity: 0.7; }
         .jv-close-btn:hover { opacity: 1; }
-
-        /* Player clickable elements */
         .jv-np-img.clickable { cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
         .jv-np-img.clickable:hover { transform: scale(1.05); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
         .jv-np-title.clickable { cursor: pointer; transition: color 0.2s; }
         .jv-np-title.clickable:hover { color: #c0392b; }
-        
-        /* Volume icon clickable */
         .jv-volume-icon.clickable { cursor: pointer; transition: color 0.2s, transform 0.1s; }
         .jv-volume-icon.clickable:hover { color: var(--spice-text); transform: scale(1.1); }
         .jv-volume-icon.muted { color: rgba(255,255,255,0.4) !important; }
-
-        /* Cover popup */
         .jv-cover-popup {
             position: fixed;
             top: 0;
@@ -617,8 +533,6 @@
         }
         .jv-cover-popup-close:hover { opacity: 1; }
         @keyframes jv-fade-in { from { opacity: 0; } to { opacity: 1; } }
-
-        /* EQ Popup */
         .jv-eq-popup {
             position: absolute;
             bottom: 100%;
@@ -691,8 +605,6 @@
             text-align: right;
             font-variant-numeric: tabular-nums;
         }
-
-        /* Settings/Changelog Modal Overlay */
         .jv-modal-overlay {
             position: absolute;
             top: 0;
@@ -726,8 +638,6 @@
         .jv-modal-title { font-size: 18px; font-weight: 700; color: #fff; }
         .jv-modal-close { background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; opacity: 0.7; }
         .jv-modal-close:hover { opacity: 1; }
-
-        /* Settings specific */
         .jv-setting-row {
             display: flex;
             justify-content: space-between;
@@ -764,6 +674,24 @@
             border-radius: 6px;
             font-size: 12px;
             cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .jv-setting-select:hover {
+            background: rgba(255,255,255,0.15);
+            border-color: rgba(255,255,255,0.3);
+        }
+        .jv-setting-select:focus {
+            outline: none;
+            border-color: #c0392b;
+            background: rgba(255,255,255,0.15);
+        }
+        .jv-setting-select option {
+            background: rgba(30,30,30,0.98);
+            color: #fff;
+            padding: 8px;
+        }
+        .jv-setting-select option:hover {
+            background: rgba(192,57,43,0.3);
         }
         .jv-setting-section {
             margin-top: 16px;
@@ -778,15 +706,12 @@
             text-transform: uppercase;
             letter-spacing: 1px;
         }
-
-        /* Changelog specific */
         .jv-changelog-entry { margin-bottom: 20px; }
         .jv-changelog-entry:last-child { margin-bottom: 0; }
         .jv-changelog-version { font-size: 14px; font-weight: 700; color: #c0392b; }
         .jv-changelog-date { font-size: 11px; color: rgba(255,255,255,0.5); margin-left: 8px; }
         .jv-changelog-list { margin: 8px 0 0 16px; padding: 0; }
         .jv-changelog-list li { font-size: 12px; color: rgba(255,255,255,0.8); margin-bottom: 4px; }
-
         .jv-native-overlay {
             position: absolute;
             top: 0;
@@ -837,7 +762,6 @@
             transform: scale(1.05);
         }
         body.juice-vault-active .Root__now-playing-bar { position: relative; }
-        
         .jv-player.disabled .jv-btn-control,
         .jv-player.disabled .jv-play-main,
         .jv-player.disabled .jv-volume-icon {
@@ -851,27 +775,21 @@
             opacity: 0.3;
         }
     `;
-
     function injectCSS() {
         const tag = document.createElement('style');
         tag.textContent = styles;
         document.head.appendChild(tag);
     }
-
     function initButton() {
         try { new Spicetify.Topbar.Button("JuiceVault", icon999, toggleModal, false, true); } catch (e) { console.error(e); }
     }
-
     function updateVolumeSliderFill(slider, value) {
         const pct = value * 100;
         const gradient = `linear-gradient(to right, #c0392b 0%, #9b59b6 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`;
-
-        // Nuclear option: remove and re-add to force browser update
         slider.style.removeProperty('background');
-        slider.offsetHeight; // Force reflow
+        slider.offsetHeight;
         slider.style.setProperty('background', gradient, 'important');
     }
-
     function showVolumeTooltip(value) {
         let tooltip = document.getElementById('jv-volume-tooltip');
         const slider = document.getElementById('jv-volume');
@@ -893,18 +811,14 @@
             tooltip.style.display = 'block';
         }
     }
-
     function hideVolumeTooltip() {
         const tooltip = document.getElementById('jv-volume-tooltip');
         if (tooltip) tooltip.style.display = 'none';
     }
-
     function downloadSong(song) {
         const downloadUrl = `${API_URL}/music/download/${song.id}`;
         window.open(downloadUrl, '_blank');
-        Spicetify.showNotification(`Downloading: ${song.title || 'Song'}`);
     }
-
     function getVolumeIcon(vol) {
         const pct = vol * 100;
         if (pct === 0) return iconVolumeMuted;
@@ -912,7 +826,6 @@
         if (pct <= 70) return iconVolumeMed;
         return iconVolume;
     }
-
     function updateVolumeUI() {
         const volSlider = document.getElementById('jv-volume');
         const volIcon = document.getElementById('jv-vol-icon');
@@ -924,60 +837,79 @@
             volIcon.innerHTML = getVolumeIcon(audio.volume);
         }
     }
-
     function toggleShuffle() {
         isShuffled = !isShuffled;
-        Spicetify.showNotification(isShuffled ? 'Shuffle ON' : 'Shuffle OFF');
         const shuffleBtn = document.getElementById('jv-shuffle');
         if (shuffleBtn) shuffleBtn.classList.toggle('active', isShuffled);
     }
-
+    function toggleRepeat() {
+        if (repeatMode === 'off') repeatMode = 'all';
+        else if (repeatMode === 'all') repeatMode = 'one';
+        else repeatMode = 'off';
+        const repeatBtn = document.getElementById('jv-repeat');
+        if (repeatBtn) {
+            repeatBtn.classList.toggle('active', repeatMode !== 'off');
+            if (repeatMode === 'one') repeatBtn.innerHTML = iconRepeatOne;
+            else repeatBtn.innerHTML = iconRepeat;
+        }
+    }
     function getNextSongIndex() {
         if (!currentSong) return 0;
         const currentIdx = vaultSongs.findIndex(s => s.id === currentSong.id);
+        if (repeatMode === 'one') {
+            return currentIdx;
+        }
         if (isShuffled) {
-            // Random song (excluding current)
-            let randomIdx;
-            do {
-                randomIdx = Math.floor(Math.random() * vaultSongs.length);
-            } while (randomIdx === currentIdx && vaultSongs.length > 1);
+            if (playedSongs.size >= vaultSongs.length) {
+                if (repeatMode === 'all') {
+                    playedSongs.clear();
+                } else {
+                    return -1;
+                }
+            }
+            const unplayedIndices = vaultSongs
+                .map((song, idx) => ({ song, idx }))
+                .filter(({ song }) => !playedSongs.has(song.id))
+                .map(({ idx }) => idx);
+            if (unplayedIndices.length === 0) {
+                return -1;
+            }
+            const randomIdx = unplayedIndices[Math.floor(Math.random() * unplayedIndices.length)];
             return randomIdx;
         }
-        // Sequential - go to next
-        return currentIdx + 1 < vaultSongs.length ? currentIdx + 1 : -1;
+        const nextIdx = currentIdx + 1;
+        if (nextIdx < vaultSongs.length) {
+            return nextIdx;
+        }
+        if (repeatMode === 'all') {
+            return 0;
+        }
+        return -1;
     }
-
     function copyTitleToClipboard() {
         if (!currentSong) return;
         const title = currentSong.title || currentSong.file_name || 'Unknown';
         navigator.clipboard.writeText(title).then(() => {
-            Spicetify.showNotification('Copied to clipboard!');
         }).catch(() => {
             Spicetify.showNotification('Failed to copy');
         });
     }
-
     function showCoverPopup() {
         if (!currentSong) return;
         const imgSrc = currentSong.cover ? `${API_URL}${currentSong.cover}` : defaultCoverSVG;
-
         const popup = document.createElement('div');
         popup.className = 'jv-cover-popup';
         popup.innerHTML = `
             <button class="jv-cover-popup-close">×</button>
             <img src="${imgSrc}" alt="Cover">
         `;
-
         popup.onclick = (e) => { if (e.target === popup) popup.remove(); };
         popup.querySelector('.jv-cover-popup-close').onclick = () => popup.remove();
-
         document.body.appendChild(popup);
     }
-
     function openSettings() {
         const jvWindow = document.querySelector('.jv-window');
         if (!jvWindow || document.getElementById('jv-settings-modal')) return;
-
         const overlay = document.createElement('div');
         overlay.className = 'jv-modal-overlay';
         overlay.id = 'jv-settings-modal';
@@ -996,6 +928,10 @@
                     <div class="jv-setting-toggle ${settings.hideShuffle ? 'active' : ''}" data-setting="hideShuffle"></div>
                 </div>
                 <div class="jv-setting-row">
+                    <span class="jv-setting-label">Hide Repeat Button</span>
+                    <div class="jv-setting-toggle ${settings.hideRepeat ? 'active' : ''}" data-setting="hideRepeat"></div>
+                </div>
+                <div class="jv-setting-row">
                     <span class="jv-setting-label">Disable Volume Sync</span>
                     <div class="jv-setting-toggle ${settings.disableVolumeSync ? 'active' : ''}" data-setting="disableVolumeSync"></div>
                 </div>
@@ -1010,13 +946,9 @@
                 </div>
             </div>
         `;
-
         jvWindow.appendChild(overlay);
-
-        // Wire up handlers
         overlay.querySelector('#jv-settings-close').onclick = () => overlay.remove();
         overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-
         overlay.querySelectorAll('.jv-setting-toggle').forEach(toggle => {
             toggle.onclick = () => {
                 const key = toggle.dataset.setting;
@@ -1026,7 +958,6 @@
                 applySettings();
             };
         });
-
         overlay.querySelectorAll('.jv-setting-select').forEach(select => {
             select.onchange = (e) => {
                 const key = select.dataset.setting;
@@ -1036,26 +967,18 @@
             };
         });
     }
-
     function openChangelog(isAutoShow = false) {
         const jvWindow = document.getElementById('juice-modal-root');
         if (!jvWindow) return;
-
-        // Check if this is first install or update
         const savedVersion = localStorage.getItem('juicevault-version');
         const isFirstInstall = !savedVersion;
         const isUpdate = savedVersion && savedVersion !== CURRENT_VERSION;
-
-        // Save current version
         localStorage.setItem('juicevault-version', CURRENT_VERSION);
-
         const overlay = document.createElement('div');
         overlay.className = 'jv-modal-overlay';
         overlay.id = 'jv-changelog-modal';
-
         let title = 'Changelog';
         let welcomeMessage = '';
-
         if (isAutoShow) {
             if (isFirstInstall) {
                 title = 'Welcome to JuiceVault! 🎉';
@@ -1074,8 +997,6 @@
                 `;
             }
         }
-
-        // Build changelog HTML
         const changelogHTML = CHANGELOG.map(entry => `
             <div class="jv-changelog-entry">
                 <span class="jv-changelog-version">v${entry.version}</span>
@@ -1085,7 +1006,6 @@
                 </ul>
             </div>
         `).join('');
-
         overlay.innerHTML = `
             <div class="jv-modal-content">
                 <div class="jv-modal-header">
@@ -1096,18 +1016,14 @@
                 ${changelogHTML}
             </div>
         `;
-
         jvWindow.appendChild(overlay);
         overlay.querySelector('#jv-changelog-close').onclick = () => overlay.remove();
         overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
     }
-
-    // Check version and show changelog on load if needed
     function checkVersionAndShowChangelog() {
         try {
             const savedVersion = localStorage.getItem('juicevault-version');
             if (!savedVersion || savedVersion !== CURRENT_VERSION) {
-                // Wait 2 seconds for Spotify UI to load
                 setTimeout(() => {
                     showStandaloneChangelog();
                 }, 2000);
@@ -1116,30 +1032,21 @@
             console.error('[JuiceVault] Version check error:', e);
         }
     }
-
-    // Show changelog as standalone overlay (doesn't require modal root)
     function showStandaloneChangelog() {
         const savedVersion = localStorage.getItem('juicevault-version');
         const isFirstInstall = !savedVersion;
         const isUpdate = savedVersion && savedVersion !== CURRENT_VERSION;
-
-        // Save current version
         localStorage.setItem('juicevault-version', CURRENT_VERSION);
-
-        // Track first install via API
         if (isFirstInstall) {
             try {
                 fetch(`${API_URL}/misc/spicetify/newInstall?v=${CURRENT_VERSION}`, { method: 'GET' });
             } catch (e) {
-                // Silent fail, analytics not critical
             }
         }
-
         let title = 'Changelog';
         let welcomeMessage = '';
         let githubButton = '';
         let viewMoreButton = '';
-
         if (isFirstInstall) {
             title = 'Welcome to JuiceVault! 🎉';
             welcomeMessage = `
@@ -1162,8 +1069,6 @@
             `;
             viewMoreButton = `<button id="jv-view-more-btn" style="margin-top: 16px; padding: 10px 20px; background: rgba(155, 89, 182, 0.2); border: 1px solid rgba(155, 89, 182, 0.4); border-radius: 6px; color: var(--spice-text); cursor: pointer; font-size: 14px; font-weight: 600; width: 100%; transition: all 0.2s;">View Full Changelog</button>`;
         }
-
-        // Show only last 3 changelogs for welcome/update
         const changelogToShow = (isFirstInstall || isUpdate) ? CHANGELOG.slice(0, 3) : CHANGELOG;
         const changelogHTML = changelogToShow.map(entry => `
             <div class="jv-changelog-entry">
@@ -1174,7 +1079,6 @@
                 </ul>
             </div>
         `).join('');
-
         const overlay = document.createElement('div');
         overlay.className = 'jv-modal-overlay';
         overlay.id = 'jv-standalone-changelog';
@@ -1189,29 +1093,22 @@
                 ${viewMoreButton}
             </div>
         `;
-
         document.body.appendChild(overlay);
-
-        // Wire up buttons
         overlay.querySelector('#jv-standalone-changelog-close').onclick = () => overlay.remove();
         overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-
         if (githubButton) {
             overlay.querySelector('#jv-github-btn').onclick = () => {
                 window.open('https://github.com/AjaxFNC-YT/Spicetify-JuiceVault', '_blank');
             };
-            // Add hover effect
             const ghBtn = overlay.querySelector('#jv-github-btn');
             ghBtn.onmouseenter = () => ghBtn.style.background = 'rgba(255,255,255,0.2)';
             ghBtn.onmouseleave = () => ghBtn.style.background = 'rgba(255,255,255,0.1)';
         }
-
         if (viewMoreButton) {
             overlay.querySelector('#jv-view-more-btn').onclick = () => {
                 overlay.remove();
                 showFullStandaloneChangelog();
             };
-            // Add hover effect
             const vmBtn = overlay.querySelector('#jv-view-more-btn');
             vmBtn.onmouseenter = () => {
                 vmBtn.style.background = 'rgba(155, 89, 182, 0.3)';
@@ -1223,8 +1120,6 @@
             };
         }
     }
-
-    // Show full changelog as standalone overlay
     function showFullStandaloneChangelog() {
         const changelogHTML = CHANGELOG.map(entry => `
             <div class="jv-changelog-entry">
@@ -1235,7 +1130,6 @@
                 </ul>
             </div>
         `).join('');
-
         const overlay = document.createElement('div');
         overlay.className = 'jv-modal-overlay';
         overlay.id = 'jv-full-changelog';
@@ -1248,22 +1142,18 @@
                 ${changelogHTML}
             </div>
         `;
-
         document.body.appendChild(overlay);
         overlay.querySelector('#jv-full-changelog-close').onclick = () => overlay.remove();
         overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
     }
-
     function applySettings() {
-        // Hide/show EQ button
         const eqBtn = document.getElementById('jv-eq-btn');
         if (eqBtn) eqBtn.style.display = settings.hideEQ ? 'none' : '';
-
-        // Hide/show Shuffle button
         const shuffleBtn = document.getElementById('jv-shuffle');
         if (shuffleBtn) shuffleBtn.style.display = settings.hideShuffle ? 'none' : '';
+        const repeatBtn = document.getElementById('jv-repeat');
+        if (repeatBtn) repeatBtn.style.display = settings.hideRepeat ? 'none' : '';
     }
-
     function toggleEQ() {
         const existing = document.getElementById('jv-eq-popup');
         if (existing) {
@@ -1272,18 +1162,13 @@
             document.getElementById('jv-eq-btn')?.classList.remove('active');
             return;
         }
-
-        // Init EQ on first use
         initEQ();
         connectAudioToEQ();
         if (audioContext?.state === 'suspended') audioContext.resume();
-
         isEQOpen = true;
         document.getElementById('jv-eq-btn')?.classList.add('active');
-
         const playerRight = document.querySelector('.jv-player-right');
         if (!playerRight) return;
-
         const popup = document.createElement('div');
         popup.className = 'jv-eq-popup';
         popup.id = 'jv-eq-popup';
@@ -1318,11 +1203,8 @@
                 <span class="jv-eq-value" id="jv-eq-gain-val">${eqState.gain} dB</span>
             </div>
         `;
-
         playerRight.style.position = 'relative';
         playerRight.appendChild(popup);
-
-        // Wire up sliders
         document.getElementById('jv-eq-bass').oninput = (e) => {
             const val = parseFloat(e.target.value);
             if (bassFilter) bassFilter.gain.value = val;
@@ -1347,7 +1229,7 @@
         document.getElementById('jv-eq-reverb').oninput = (e) => {
             const val = parseFloat(e.target.value);
             if (reverbNode && reverbNode._wetGain) {
-                reverbNode._wetGain.gain.value = val / 100; // 0-1 range
+                reverbNode._wetGain.gain.value = val / 100;
             }
             eqState.reverb = val;
             saveEQState();
@@ -1356,7 +1238,7 @@
         document.getElementById('jv-eq-gain').oninput = (e) => {
             const val = parseFloat(e.target.value);
             if (masterGainNode) {
-                masterGainNode.gain.value = 1 + (val / 12); // -12dB to +12dB maps to ~0.25 to ~4
+                masterGainNode.gain.value = 1 + (val / 12);
             }
             eqState.gain = val;
             saveEQState();
@@ -1379,8 +1261,6 @@
             document.getElementById('jv-eq-reverb-val').textContent = '0%';
             document.getElementById('jv-eq-gain-val').textContent = '0 dB';
         };
-
-        // Close on click outside
         setTimeout(() => {
             const closeHandler = (e) => {
                 if (!popup.contains(e.target) && e.target.id !== 'jv-eq-btn') {
@@ -1393,12 +1273,10 @@
             document.addEventListener('click', closeHandler);
         }, 10);
     }
-
     function showNativeOverlay(songName) {
         removeNativeOverlay();
         const playerBar = document.querySelector('.Root__now-playing-bar');
         if (!playerBar) return;
-
         const overlay = document.createElement('div');
         overlay.className = 'jv-native-overlay';
         overlay.id = 'jv-native-overlay';
@@ -1408,18 +1286,14 @@
             <button class="jv-native-overlay-btn">Open JuiceVault</button>
         `;
         playerBar.appendChild(overlay);
-
         overlay.querySelector('.jv-native-overlay-btn').onclick = () => {
             if (!isModalOpen) toggleModal();
         };
     }
-
-
     function removeNativeOverlay() {
         const overlay = document.getElementById('jv-native-overlay');
         if (overlay) overlay.remove();
     }
-
     async function loadSongs() {
         try {
             const res = await fetch(`${API_URL}/music/list`);
@@ -1433,17 +1307,13 @@
             if (content) content.innerHTML = '<div style="width:100%; text-align:center; color:red">Failed to load vault. API offline?</div>';
         }
     }
-
     function debounce(func, wait) { let timeout; return function (...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), wait); }; }
-
     let isLoading = false;
-
     async function searchVault(query) {
         if (!query) { loadSongs(); return; }
         try {
             isLoading = true;
             showLoading();
-            // Sanitize query - normalize quotes, remove problematic chars
             const safeQuery = query.replace(/['']/g, "'").replace(/[()]/g, "").trim();
             const res = await fetch(`${API_URL}/music/search?q=${encodeURIComponent(safeQuery)}`);
             const data = await res.json();
@@ -1458,7 +1328,6 @@
             if (container) container.innerHTML = `<div style="width:100%; text-align:center; padding-top:50px;"><div style="color:rgba(255,255,255,0.6);">Search failed. Try again.</div></div>`;
         }
     }
-
     function showLoading() {
         const container = document.getElementById('jv-song-list');
         if (container) {
@@ -1468,27 +1337,23 @@
             </div>`;
         }
     }
-
     function renderGallery() {
         const container = document.getElementById('jv-song-list');
         if (!container) return;
-        if (isLoading) return; // Don't render while loading
+        if (isLoading) return;
         if (displayCount === CHUNK_SIZE) { container.innerHTML = ""; container.scrollTop = 0; }
         if (container.children.length === 1 && container.innerText.includes("Loading")) container.innerHTML = "";
-
         const currentCount = container.children.length;
         const toRender = vaultSongs.slice(currentCount, displayCount);
         if (vaultSongs.length === 0 && displayCount === CHUNK_SIZE) {
             container.innerHTML = `<div style="width:100%; text-align:center; padding-top:50px;"><div style="color:rgba(255,255,255,0.6);">No results found.</div></div>`;
             return;
         }
-
         toRender.forEach((song, idx) => {
             const realIndex = currentCount + idx;
             const card = document.createElement('div');
             card.className = 'jv-card';
             card.onclick = () => playSongAtIndex(realIndex);
-
             const title = song.title || song.file_name;
             const artist = song.artist || "Juice WRLD";
             const img = song.cover ? `${API_URL}${song.cover}` : defaultCoverSVG;
@@ -1507,7 +1372,6 @@
                     </button>
                 </div>
             `;
-
             const downloadBtn = card.querySelector('.jv-card-download');
             downloadBtn.onclick = (e) => {
                 e.stopPropagation();
@@ -1516,21 +1380,21 @@
             container.appendChild(card);
         });
     }
-
     function onScroll(e) { const el = e.target; if (el.scrollHeight - el.scrollTop - el.clientHeight < 1200) { if (displayCount < vaultSongs.length) { displayCount += CHUNK_SIZE; renderGallery(); } } }
     function playSongAtIndex(index) { if (index < 0 || index >= vaultSongs.length) return; playSong(vaultSongs[index]); }
-
     function playSong(song) {
         Spicetify.Player.pause();
         currentSong = song;
-        audio.src = `${API_URL}/music/stream/${song.id}`;
+        audio.src = `${API_URL}/music/stream/${song.id}?src=spicetify`;
         audio.volume = Spicetify.Player.getVolume();
         audio.play();
+        if (isShuffled) {
+            playedSongs.add(song.id);
+        }
         renderPlayerState();
         document.body.classList.add('juice-vault-active');
         showNativeOverlay(song.title || song.file_name);
     }
-
     function playNext() {
         if (!currentSong) return;
         const nextIdx = getNextSongIndex();
@@ -1541,7 +1405,6 @@
         const idx = vaultSongs.findIndex(s => s.id === currentSong.id);
         if (idx > 0) playSongAtIndex(idx - 1);
     }
-
     function togglePlay() {
         if (!currentSong) return;
         if (audio.paused) {
@@ -1558,34 +1421,26 @@
         }
         renderPlayerState();
     }
-
     function renderPlayerState() {
         const titleEl = document.getElementById('jv-np-title'); const artistEl = document.getElementById('jv-np-artist'); const imgEl = document.getElementById('jv-np-img');
         const playBtn = document.getElementById('jv-play-btn'); const volSlider = document.getElementById('jv-volume'); const bar = document.getElementById('jv-progress-fill');
         const timeEl = document.getElementById('jv-time-current'); const durEl = document.getElementById('jv-time-total');
         const playerEl = document.querySelector('.jv-player');
         if (!titleEl) return;
-
         if (playerEl) {
             if (currentSong) { playerEl.classList.remove('disabled'); }
             else { playerEl.classList.add('disabled'); }
         }
-
         if (currentSong) { titleEl.innerText = currentSong.title || "Unknown Track"; artistEl.innerText = currentSong.artist || "Juice WRLD"; imgEl.src = currentSong.cover ? `${API_URL}${currentSong.cover}` : defaultCoverSVG; }
         else { titleEl.innerText = "No Song Playing"; artistEl.innerText = ""; imgEl.src = defaultCoverSVG; }
-
         const isPlaying = !audio.paused;
         if (playBtn) playBtn.innerHTML = isPlaying
             ? '<svg viewBox="0 0 16 16"><path d="M2.7 1a.7.7 0 0 0-.7.7v12.6a.7.7 0 0 0 .7.7h2.6a.7.7 0 0 0 .7-.7V1.7a.7.7 0 0 0-.7-.7H2.7zm8 0a.7.7 0 0 0-.7.7v12.6a.7.7 0 0 0 .7.7h2.6a.7.7 0 0 0 .7-.7V1.7a.7.7 0 0 0-.7-.7h-2.6z"/></svg>'
             : '<svg viewBox="0 0 16 16"><path d="M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288V1.713z"/></svg>';
-
-        // Update volume slider with currentVolume (not audio.volume which is capped at 1.0)
         if (volSlider && document.activeElement !== volSlider) { volSlider.value = audio.volume; updateVolumeSliderFill(volSlider, audio.volume); }
         if (audio.duration && bar) { const pct = (audio.currentTime / audio.duration) * 100; bar.style.width = pct + '%'; if (timeEl) timeEl.innerText = formatTime(audio.currentTime); if (durEl) durEl.innerText = formatTime(audio.duration); }
     }
-
     function formatTime(seconds) { if (!seconds || isNaN(seconds)) return "0:00"; const m = Math.floor(seconds / 60); const s = Math.floor(seconds % 60); return `${m}:${s.toString().padStart(2, '0')}`; }
-
     audio.ontimeupdate = () => {
         const bar = document.getElementById('jv-progress-fill'); const timeEl = document.getElementById('jv-time-current'); const durEl = document.getElementById('jv-time-total');
         if (audio.duration) { const pct = (audio.currentTime / audio.duration) * 100; if (bar) bar.style.width = pct + '%'; if (timeEl) timeEl.innerText = formatTime(audio.currentTime); if (durEl) durEl.innerText = formatTime(audio.duration); }
@@ -1596,12 +1451,10 @@
             playSongAtIndex(nextIdx);
             return;
         }
-        // No more songs or shuffle returned -1
         document.body.classList.remove('juice-vault-active');
         removeNativeOverlay();
         renderPlayerState();
     };
-
     function startVolumeSync() {
         if (volumeInterval) clearInterval(volumeInterval);
         volumeInterval = setInterval(() => {
@@ -1617,12 +1470,10 @@
             }
         }, 100);
     }
-
     let isToggling = false;
     function toggleModal() {
         if (isToggling) return;
         isToggling = true;
-
         if (isModalOpen) {
             const el = document.getElementById('juice-modal-root'); if (el) el.remove(); isModalOpen = false;
             if (audio.paused) clearInterval(volumeInterval);
@@ -1631,10 +1482,8 @@
             const currentVol = Spicetify.Player.getVolume(); audio.volume = currentVol;
             startVolumeSync();
         }
-
         setTimeout(() => { isToggling = false; }, 200);
     }
-
     function openModal() {
         const modal = document.createElement('div'); modal.id = 'juice-modal-root'; modal.className = 'jv-backdrop';
         modal.innerHTML = `
@@ -1663,10 +1512,11 @@
                     </div>
                     <div class="jv-player-center">
                         <div class="jv-controls">
-                            <button class="jv-btn-control" id="jv-shuffle" title="Shuffle">${iconShuffle}</button>
+                            <button class="jv-btn-control jv-btn-shuffle" id="jv-shuffle" title="Shuffle">${iconShuffle}</button>
                             <button class="jv-btn-control" id="jv-prev"><svg viewBox="0 0 16 16"><path d="M3.3 1a.7.7 0 0 1 .7.7v5.15l9.95-5.744a.7.7 0 0 1 1.05.606v12.575a.7.7 0 0 1-1.05.607L4 9.149V14.3a.7.7 0 0 1-.7.7H1.7a.7.7 0 0 1-.7-.7V1.7a.7.7 0 0 1 .7-.7h1.6z"/></svg></button>
                             <div class="jv-play-main" id="jv-play-btn"><svg viewBox="0 0 16 16"><path d="M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288V1.713z"/></svg></div>
                             <button class="jv-btn-control" id="jv-next"><svg viewBox="0 0 16 16"><path d="M12.7 1a.7.7 0 0 0-.7.7v5.15L2.05 1.107A.7.7 0 0 0 1 1.714v12.575a.7.7 0 0 0 1.05.607L12 9.149V14.3a.7.7 0 0 0 .7.7h1.6a.7.7 0 0 0 .7-.7V1.7a.7.7 0 0 0-.7-.7h-1.6z"/></svg></button>
+                            <button class="jv-btn-control jv-btn-repeat" id="jv-repeat" title="Repeat">${iconRepeat}</button>
                         </div>
                         <div class="jv-progress-container">
                             <span id="jv-time-current">0:00</span>
@@ -1682,13 +1532,10 @@
                 </div>
             </div>
         `;
-
         document.body.appendChild(modal);
-
         applySettings();
         renderPlayerState();
         const handleSearch = debounce((e) => { searchVault(e.target.value); }, 300);
-
         document.getElementById('jv-close').onclick = toggleModal;
         document.getElementById('jv-play-btn').onclick = togglePlay;
         document.getElementById('jv-next').onclick = playNext;
@@ -1696,13 +1543,13 @@
         document.getElementById('jv-search').oninput = handleSearch;
         document.getElementById('jv-open-site').onclick = () => window.open('https://juicevault.xyz/', '_blank');
         document.getElementById('jv-shuffle').onclick = toggleShuffle;
+        document.getElementById('jv-repeat').onclick = toggleRepeat;
         document.getElementById('jv-eq-btn').onclick = toggleEQ;
         document.getElementById('jv-settings-btn').onclick = openSettings;
         document.getElementById('jv-changelog-btn').onclick = openChangelog;
         document.getElementById('jv-np-img').onclick = showCoverPopup;
         document.getElementById('jv-np-title').onclick = copyTitleToClipboard;
         modal.onclick = (e) => { if (e.target === modal) toggleModal(); };
-
         const songList = document.getElementById('jv-song-list');
         songList.onclick = (e) => {
             const downloadBtn = e.target.closest('.jv-card-download');
@@ -1733,11 +1580,8 @@
         vol.onmouseup = hideVolumeTooltip;
         vol.onmouseleave = hideVolumeTooltip;
         updateVolumeSliderFill(vol, audio.volume);
-
         loadSongs();
     }
-
-    // Init
     injectCSS();
     initButton();
     checkVersionAndShowChangelog();
