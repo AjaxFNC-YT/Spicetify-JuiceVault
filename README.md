@@ -1,4 +1,5 @@
-# Juice Vault                                           ⭐ MAKE SURE TO STAR THE PROJECT IF YOU ENJOY!
+# Juice Vault                                          
+- ⭐ MAKE SURE TO STAR THE PROJECT IF YOU ENJOY!
 
 A Spicetify extension that lets you stream and download unreleased Juice WRLD tracks directly in Spotify.
 
@@ -50,6 +51,7 @@ A Spicetify extension that lets you stream and download unreleased Juice WRLD tr
 
 
 ### This is a fan-made project made with 💜 for Juice WRLD. Not affiliated with Grade A Productions or Spotify.
+
 
 
 
