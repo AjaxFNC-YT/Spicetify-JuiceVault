@@ -6,12 +6,26 @@ import { Queue } from "./playback/Queue";
 import { saveSession, loadSession, clearSession, type SavedSession } from "./playback/Session";
 import { Equalizer } from "./playback/Equalizer";
 import { readEqualizer, describeEqualizer, watchEqualizer } from "./integration/SpotifyEq";
+import { traceForJv } from "./integration/trace";
 import { buildTrackUri, isJvUri, parseSongId } from "./integration/uri";
 import { PlayInterceptor } from "./integration/PlayInterceptor";
 import { Playability } from "./integration/Playability";
 import { getMetadata } from "./core/api/songs";
 
 const log = createLogger("boot");
+
+async function waitFor(predicate: () => boolean, timeoutMs = 30000): Promise<boolean> {
+	const started = Date.now();
+	while (Date.now() - started < timeoutMs) {
+		try {
+			if (predicate()) return true;
+		} catch {
+			/* keep waiting */
+		}
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	}
+	return false;
+}
 
 async function waitForSpicetify(timeoutMs = 30000): Promise<boolean> {
 	const started = Date.now();
@@ -33,6 +47,18 @@ function toTrack(meta: Awaited<ReturnType<typeof getMetadata>>): ShadowTrack {
 }
 
 async function main(): Promise<void> {
+	const platformReady = await waitFor(
+		() => Boolean(typeof Spicetify !== "undefined" && Spicetify.Platform?.PlaylistAPI),
+	);
+
+	const earlyPlayability = new Playability();
+	if (platformReady) {
+		earlyPlayability.install();
+		earlyPlayability.refreshViews();
+		earlyPlayability.ensureFreshOnce();
+		log.info("playability installed early");
+	}
+
 	const ready = await waitForSpicetify();
 	if (!ready) {
 		log.error("Spicetify never became available; aborting boot");
@@ -53,7 +79,9 @@ async function main(): Promise<void> {
 	const interceptor = new PlayInterceptor(player, arbiter, queue);
 	advance = (item) => void interceptor.playQueueItem(item);
 
-	const playability = new Playability();
+	const playability = earlyPlayability;
+	playability.install();
+	playability.refreshViews();
 	const eqSnapshot = readEqualizer();
 	const equalizer = new Equalizer(player.element, eqSnapshot?.frequencies);
 
@@ -73,6 +101,8 @@ async function main(): Promise<void> {
 
 	playability.install();
 	interceptor.install();
+
+	disposers.push(playability.watchNavigation());
 
 	let lastPersist = 0;
 	const persist = (force: boolean): void => {
@@ -200,6 +230,7 @@ async function main(): Promise<void> {
 		},
 		dumpQueue: () => interceptor.inspectQueue(),
 		dumpQueueStore: () => interceptor.inspectQueueStore(),
+		trace: (seconds?: number) => traceForJv(seconds),
 		dumpEqualizer: () => describeEqualizer(),
 		dumpPlaylist: (uri: string) => playability.inspectPlaylist(uri),
 		equalizer,
