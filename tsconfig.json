@@ -1,0 +1,26 @@
+{
+	"compilerOptions": {
+		"target": "ES2020",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"lib": ["ES2020", "DOM", "DOM.Iterable"],
+		"strict": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true,
+		"exactOptionalPropertyTypes": false,
+		"resolveJsonModule": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"jsx": "react-jsx",
+		"noEmit": true,
+		"paths": {
+			"@core/*": ["./src/core/*"],
+			"@playback/*": ["./src/playback/*"],
+			"@integration/*": ["./src/integration/*"]
+		}
+	},
+	"include": ["src/**/*.ts", "src/**/*.tsx", "config.json"]
+}

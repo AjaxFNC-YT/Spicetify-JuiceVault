@@ -1,0 +1,19 @@
+{
+	"name": "juicevault-spicetify",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "node scripts/build.mjs",
+		"install-ext": "node scripts/install.mjs",
+		"dev": "node scripts/dev.mjs",
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"esbuild": "^0.25.0",
+		"typescript": "^5.7.0"
+	},
+	"allowScripts": {
+		"esbuild@0.25.12": true
+	}
+}
