@@ -6,16 +6,36 @@ import { peekMetadata } from "../core/api/songs";
 const log = createLogger("Playability");
 
 const viewOptions = new Map<string, any>();
+const viewListeners = new Set<(uri: string) => void>();
+
+export function onViewOptionsChanged(listener: (uri: string) => void): () => void {
+	viewListeners.add(listener);
+	return () => viewListeners.delete(listener);
+}
 
 export function recordViewOptions(uri: string, options: any): void {
 	if (!uri || !options || typeof options !== "object") return;
 	if (!options.sort && !options.filter) return;
-	viewOptions.set(uri, {
+
+	const next = {
 		filter: options.filter ?? "",
 		sort: options.sort ?? null,
 		filterPredicates: options.filterPredicates ?? [],
 		descriptorFilter: options.descriptorFilter ?? [],
-	});
+	};
+
+	const previous = viewOptions.get(uri);
+	const changed = JSON.stringify(previous) !== JSON.stringify(next);
+	viewOptions.set(uri, next);
+
+	if (!changed) return;
+	for (const listener of viewListeners) {
+		try {
+			listener(uri);
+		} catch {
+			continue;
+		}
+	}
 }
 
 export function getViewOptions(uri: string): any | null {

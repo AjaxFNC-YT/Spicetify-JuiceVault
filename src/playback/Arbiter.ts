@@ -34,7 +34,7 @@ export class Arbiter {
 	constructor(
 		private readonly player: ShadowPlayer,
 		private readonly queue: Queue,
-		private readonly onAdvance: (item: any) => void,
+		private readonly onAdvance: (direction: 1 | -1) => void,
 		private readonly onRelease: () => void = () => {},
 	) {
 		this.capabilities = probeCapabilities();
@@ -148,13 +148,7 @@ export class Arbiter {
 	};
 
 	private advance(direction: 1 | -1): void {
-		const item = direction === 1 ? this.queue.next() : this.queue.previous();
-		if (!item) {
-			this.player.pause();
-			this.push(true);
-			return;
-		}
-		this.onAdvance(item);
+		this.onAdvance(direction);
 	}
 
 	emitQueueUpdate(): void {

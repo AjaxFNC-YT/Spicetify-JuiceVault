@@ -1,7 +1,7 @@
 import { createLogger } from "../core/log";
 import { getMetadata } from "../core/api/songs";
-import { isJvUri, parseSongId } from "./uri";
-import { getViewOptions, getContextName } from "./Playability";
+import { isJvUri, parseSongId, buildTrackUri } from "./uri";
+import { getViewOptions, getContextName, onViewOptionsChanged } from "./Playability";
 import type { ShadowPlayer } from "../playback/ShadowPlayer";
 import type { Arbiter } from "../playback/Arbiter";
 import type { Queue } from "../playback/Queue";
@@ -39,6 +39,45 @@ interface InterceptTarget {
 	uid?: string;
 	contextUri?: string;
 	index?: number;
+}
+
+type SortField = "TITLE" | "ARTIST" | "ALBUM" | "DURATION" | "ADDED_AT" | "CUSTOM";
+
+function sortKey(item: any, field: SortField): string | number {
+	switch (field) {
+		case "TITLE":
+			return (item?.name ?? "").toLowerCase();
+		case "ARTIST":
+			return (item?.artists?.[0]?.name ?? "").toLowerCase();
+		case "ALBUM":
+			return (item?.album?.name ?? "").toLowerCase();
+		case "DURATION":
+			return Number(item?.duration?.milliseconds ?? 0);
+		case "ADDED_AT":
+			return String(item?.addedAt ?? "");
+		default:
+			return "";
+	}
+}
+
+function applySort(items: any[], sort: any): any[] {
+	const field = sort?.field as SortField | undefined;
+	if (!field || field === "CUSTOM" || !items.length) return items;
+
+	const direction = sort?.order === "DESC" ? -1 : 1;
+	const decorated = items.map((item, index) => ({ item, index, key: sortKey(item, field) }));
+
+	decorated.sort((a, b) => {
+		if (typeof a.key === "number" && typeof b.key === "number") {
+			if (a.key !== b.key) return (a.key - b.key) * direction;
+			return a.index - b.index;
+		}
+		const compared = String(a.key).localeCompare(String(b.key));
+		if (compared !== 0) return compared * direction;
+		return a.index - b.index;
+	});
+
+	return decorated.map((entry) => entry.item);
 }
 
 function extractTarget(args: any[]): InterceptTarget | undefined {
@@ -81,6 +120,7 @@ export class PlayInterceptor {
 	private reassertWindow = 0;
 	private reassertsInWindow = 0;
 	private settleTimer: number | null = null;
+	private unsubscribeViewOptions: (() => void) | null = null;
 	private adopting: string | null = null;
 	private shadowedService: any = null;
 	private shadowedApi: any = null;
@@ -132,6 +172,11 @@ export class PlayInterceptor {
 
 		this.shadowTransport();
 		this.shadowQueueService();
+		this.unsubscribeViewOptions = onViewOptionsChanged((uri) => {
+			if (uri !== this.contextUri) return;
+			log.info("playlist sort changed, rebuilding queue");
+			void this.loadQueue(uri, undefined, this.nowPlayingUri() ?? undefined);
+		});
 		this.watchUpdates();
 		this.watchQueueUpdates();
 		this.syncFromCurrentState();
@@ -180,10 +225,39 @@ export class PlayInterceptor {
 		});
 	}
 
+	nowPlayingUri(): string | null {
+		const track = this.player.current;
+		if (this.arbiter.isClaimed && track) {
+			return buildTrackUri({
+				songId: track.songId,
+				artist: track.artist,
+				title: track.title,
+				durationSeconds: track.durationSeconds,
+			});
+		}
+		return this.lastSpotifyUri;
+	}
+
+	private syncCursor(): boolean {
+		const track = this.player.current;
+
+		if (this.arbiter.isClaimed && track) {
+			const matched = this.queue.syncWhere((item) => parseSongId(item?.uri ?? "") === track.songId);
+			if (matched) return true;
+		}
+
+		const uri = this.nowPlayingUri();
+		if (!uri) return false;
+
+		const uid = this.arbiter.isClaimed ? this.arbiter.playbackContext?.uid : undefined;
+		return this.queue.syncTo(uid, uri);
+	}
+
 	private shadowTransport(): void {
 		this.shadow("skipToNext", (...args: any[]) => {
 			this.suppress();
 			if (!this.ownsQueue) return this.originals.get("skipToNext")?.(...args);
+			this.syncCursor();
 			const item = this.queue.next();
 			if (!item) return this.originals.get("skipToNext")?.(...args);
 			void this.playQueueItem(item);
@@ -193,6 +267,7 @@ export class PlayInterceptor {
 		this.shadow("skipToPrevious", (...args: any[]) => {
 			this.suppress();
 			if (!this.ownsQueue) return this.originals.get("skipToPrevious")?.(...args);
+			this.syncCursor();
 			const item = this.queue.previous();
 			if (!item) return this.originals.get("skipToPrevious")?.(...args);
 			void this.playQueueItem(item);
@@ -228,6 +303,7 @@ export class PlayInterceptor {
 	private projectQueue(real: any): any {
 		if (!this.ownsQueue || !real || typeof real !== "object") return real;
 
+		this.syncCursor();
 		const upcoming = this.queue.upcoming(40);
 		if (!upcoming.length) return real;
 
@@ -425,6 +501,7 @@ export class PlayInterceptor {
 			this.handoffTimer = null;
 			if (this.handoffForUri !== uri) return;
 
+			this.syncCursor();
 			const target = this.queue.next();
 			if (!target) return;
 
@@ -593,9 +670,11 @@ export class PlayInterceptor {
 		}
 
 		if (!items.length) {
-			const contents = await api.getContents(contextUri);
-			items = contents?.items ?? [];
+			const plain = await api.getContents(contextUri);
+			items = plain?.items ?? [];
 		}
+
+		if (view?.sort?.field) items = applySort(items, view.sort);
 
 		return items;
 	}
@@ -647,6 +726,17 @@ export class PlayInterceptor {
 
 	reloadQueue(): void {
 		if (this.contextUri) void this.loadQueue(this.contextUri, undefined, this.lastSpotifyUri ?? undefined);
+	}
+
+	advanceQueue(direction: 1 | -1): void {
+		if (!this.ownsQueue) return;
+		this.syncCursor();
+		const item = direction === 1 ? this.queue.next() : this.queue.previous();
+		if (!item) {
+			this.player.pause();
+			return;
+		}
+		void this.playQueueItem(item);
 	}
 
 	async playQueueItem(item: any): Promise<void> {
@@ -714,10 +804,15 @@ export class PlayInterceptor {
 			handoffCount: this.handoffCount,
 			handoffScheduled: this.handoffTimer !== null,
 			lastSpotifyUri: this.lastSpotifyUri,
+			sortField: getViewOptions(this.contextUri ?? "")?.sort?.field ?? null,
+			cursorTrack: this.queue.current?.name ?? null,
+			upcoming: this.queue.upcoming(5).map((item: any) => item?.name ?? item?.uri),
 		};
 	}
 
 	dispose(): void {
+		this.unsubscribeViewOptions?.();
+		this.unsubscribeViewOptions = null;
 		if (this.settleTimer !== null) window.clearTimeout(this.settleTimer);
 		this.settleTimer = null;
 		this.clearHandoff();

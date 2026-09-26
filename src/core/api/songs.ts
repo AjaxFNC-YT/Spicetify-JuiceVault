@@ -1,4 +1,5 @@
-import { config } from "../config";
+import { get } from "../http/client";
+import { toSong, toSongs, type Song, type SongCategory } from "../models/song";
 
 export interface SongMetadata {
 	id: string;
@@ -13,32 +14,71 @@ export interface SongMetadata {
 	play_count?: number;
 }
 
-const cache = new Map<string, SongMetadata>();
+const CATEGORY_PATHS: Record<SongCategory, string> = {
+	main: "/music/list",
+	instrumental: "/music/instrumentals/list",
+	remaster: "/music/remasters/list",
+	stem: "/music/stems/list",
+	released: "/music/released/list",
+	cut: "/music/cuts/list",
+};
 
-function base(): string {
-	return config.api.baseUrl.replace(/\/+$/, "");
-}
-
-async function request<T>(path: string): Promise<T> {
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), config.api.timeoutMs);
-	try {
-		const response = await fetch(`${base()}${path}`, { signal: controller.signal });
-		if (!response.ok) throw new Error(`${path} failed: ${response.status}`);
-		return (await response.json()) as T;
-	} finally {
-		clearTimeout(timer);
-	}
-}
+const metadataCache = new Map<string, SongMetadata>();
 
 export async function getMetadata(songId: string): Promise<SongMetadata> {
-	const hit = cache.get(songId);
+	const hit = metadataCache.get(songId);
 	if (hit) return hit;
-	const meta = await request<SongMetadata>(`/music/${encodeURIComponent(songId)}/metadata`);
-	cache.set(songId, meta);
+	const meta = await get<SongMetadata>(`/music/${encodeURIComponent(songId)}/metadata`);
+	metadataCache.set(songId, meta);
 	return meta;
 }
 
 export function peekMetadata(songId: string): SongMetadata | undefined {
-	return cache.get(songId);
+	return metadataCache.get(songId);
+}
+
+export function rememberMetadata(song: Song): void {
+	if (metadataCache.has(song.id)) return;
+	metadataCache.set(song.id, {
+		id: song.id,
+		title: song.title,
+		artist: song.artist,
+		album: song.album ?? undefined,
+		year: song.year,
+		duration: song.durationSeconds,
+		length: song.length,
+		play_count: song.playCount,
+	});
+}
+
+export async function listCategory(category: SongCategory): Promise<Song[]> {
+	const response = await get<{ total: number; songs: unknown[] }>(CATEGORY_PATHS[category]);
+	return toSongs(response?.songs ?? [], category);
+}
+
+export async function listAll(categories: SongCategory[]): Promise<Song[]> {
+	const results = await Promise.allSettled(categories.map((category) => listCategory(category)));
+	const seen = new Set<string>();
+	const songs: Song[] = [];
+
+	for (const result of results) {
+		if (result.status !== "fulfilled") continue;
+		for (const song of result.value) {
+			if (seen.has(song.id)) continue;
+			seen.add(song.id);
+			songs.push(song);
+		}
+	}
+
+	return songs;
+}
+
+export async function searchRemote(query: string): Promise<Song[]> {
+	const response = await get<{ results: unknown[] }>(`/music/search?q=${encodeURIComponent(query)}`);
+	return toSongs(response?.results ?? []);
+}
+
+export async function getSong(songId: string): Promise<Song | null> {
+	const meta = await getMetadata(songId);
+	return toSong(meta);
 }

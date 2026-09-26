@@ -128,6 +128,16 @@ export class Queue {
 		return this.items;
 	}
 
+	syncWhere(predicate: (item: any) => boolean): boolean {
+		if (this.isEmpty) return false;
+		const index = this.items.findIndex(predicate);
+		if (index < 0) return false;
+		const position = this.order.indexOf(index);
+		if (position < 0) return false;
+		this.cursor = position;
+		return true;
+	}
+
 	contains(uri: string): boolean {
 		return this.items.some((item) => item.uri === uri);
 	}

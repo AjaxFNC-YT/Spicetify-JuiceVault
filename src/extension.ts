@@ -11,6 +11,7 @@ import { buildTrackUri, isJvUri, parseSongId } from "./integration/uri";
 import { PlayInterceptor } from "./integration/PlayInterceptor";
 import { Playability } from "./integration/Playability";
 import { getMetadata } from "./core/api/songs";
+import { Catalog } from "./core/catalog/catalog";
 
 const log = createLogger("boot");
 
@@ -66,18 +67,20 @@ async function main(): Promise<void> {
 	}
 
 	const disposers: Array<() => void> = [];
+	const catalog = new Catalog();
+	void catalog.load();
 	const player = new ShadowPlayer();
 	const queue = new Queue();
 
-	let advance: (item: any) => void = () => {};
+	let advance: (direction: 1 | -1) => void = () => {};
 	const arbiter = new Arbiter(
 		player,
 		queue,
-		(item) => advance(item),
+		(direction) => advance(direction),
 		() => clearSession(),
 	);
 	const interceptor = new PlayInterceptor(player, arbiter, queue);
-	advance = (item) => void interceptor.playQueueItem(item);
+	advance = (direction) => interceptor.advanceQueue(direction);
 
 	const playability = earlyPlayability;
 	playability.install();
@@ -242,12 +245,16 @@ async function main(): Promise<void> {
 			position: Math.round(player.position),
 			duration: Math.round(player.duration),
 			volume: player.volume,
+			catalog: catalog.diagnostics,
 			...arbiter.diagnostics,
 			interceptor: interceptor.diagnostics,
 			playability: playability.diagnostics,
 		}),
 		interceptor,
 		playability,
+		catalog,
+		search: (query: string, limit?: number) => catalog.search(query, limit).map((result) => result.song),
+		reloadCatalog: () => catalog.load(true),
 		queue,
 		async addToPlaylist(playlistUri: string, songId: string = config.dev.sampleSongId): Promise<string> {
 			const meta = await getMetadata(songId);
