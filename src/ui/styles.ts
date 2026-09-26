@@ -237,6 +237,10 @@ const CSS = `
 .jv-code { display: block; padding: 10px 12px; border-radius: 4px; background: rgba(255,255,255,.07); color: #fff;
   font-family: ui-monospace, Consolas, monospace; font-size: .78rem; line-height: 1.5; word-break: break-all; user-select: all; }
 .jv-update-notes { max-height: 40vh; }
+.jv-dp { min-width: min(460px, 80vw); }
+.jv-dp .jv-dp-cover { width: 48px; height: 48px; }
+.jv-dp-search { margin: 0; }
+.jv-dp-empty { padding: 16px 8px; }
 .jv-modal-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 4px; }
 .jv-radio { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 2px solid #727272; box-sizing: border-box; }
 .jv-radio[data-on="true"] { border: 5px solid var(--spice-button-active, #1ed760); }

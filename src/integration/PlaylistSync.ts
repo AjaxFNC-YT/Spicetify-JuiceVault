@@ -54,6 +54,7 @@ export interface SyncResult {
 export interface Destination {
 	uri: string;
 	name: string;
+	image?: string | null;
 }
 
 export interface SyncApi {
@@ -239,7 +240,9 @@ export class PlaylistSync implements SyncApi {
 		const walk = (items: any[]): void => {
 			for (const item of items ?? []) {
 				if (item?.type === "folder") walk(item.items);
-				else if (item?.type === "playlist" && item.isOwnedBySelf && item.canAdd !== false) playlists.push({ uri: item.uri, name: item.name });
+				else if (item?.type === "playlist" && item.isOwnedBySelf && item.canAdd !== false) {
+					playlists.push({ uri: item.uri, name: item.name, image: item.images?.[0]?.url ?? null });
+				}
 			}
 		};
 		walk(contents?.items ?? []);

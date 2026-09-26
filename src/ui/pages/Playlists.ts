@@ -8,6 +8,8 @@ import { Button } from "../components/controls";
 import { PlaylistCover } from "../components/PlaylistCover";
 import { openModal } from "../modal";
 import { ConfirmUnheardSync } from "../modals/ConfirmUnheardSync";
+import { DestinationPicker } from "../modals/DestinationPicker";
+import type { PickerMode } from "../modals/SourcePicker";
 
 declare const Spicetify: any;
 
@@ -103,22 +105,6 @@ export function Playlists({ jv }: { jv: JuiceVaultApi | null }): any {
 				notify(`“${playlist.name}” is now synced to your library`);
 				open(uri);
 			}),
-		importNew: (playlist: JvPlaylist) =>
-			run(playlist.id, "Importing…", async () => {
-				const uri = await jv!.sync.importNew(playlist.id, playlist);
-				notify(`Imported “${playlist.name}” into your library`);
-				open(uri);
-			}),
-		importInto: (playlist: JvPlaylist, target: Destination) =>
-			run(playlist.id, "Importing…", async () => {
-				const added = await jv!.sync.importInto(target.uri, playlist.id);
-				notify(added ? `Added ${added} songs to “${target.name}”` : `“${target.name}” already has them all`);
-			}),
-		syncWith: (playlist: JvPlaylist, target: Destination) =>
-			run(playlist.id, "Syncing…", async () => {
-				await jv!.sync.syncWith(target.uri, playlist.id, target.name);
-				notify(`“${target.name}” is now synced with “${playlist.name}”`);
-			}),
 		syncNow: (playlist: JvPlaylist, links: PlaylistLink[]) =>
 			run(playlist.id, "Syncing…", async () => {
 				for (const link of links) await jv!.sync.syncNow(link.spotifyUri, true);
@@ -126,31 +112,38 @@ export function Playlists({ jv }: { jv: JuiceVaultApi | null }): any {
 			}),
 	};
 
-	const RC = native();
-
-	const destinationMenu = (label: string, key: string, choose: (target: Destination) => void, exclude: Set<string>): any =>
-		h(
-			RC.MenuSubMenuItem,
-			{ key, displayText: label },
-			destinations.filter((target) => !exclude.has(target.uri)).length
-				? destinations
-						.filter((target) => !exclude.has(target.uri))
-						.map((target) => h(RC.MenuItem, { key: target.uri, onClick: () => choose(target) }, target.name))
-				: h(RC.MenuItem, { key: "none", disabled: true }, "No editable playlists"),
+	const pick = (playlist: JvPlaylist, mode: PickerMode): void => {
+		if (!jv) return;
+		if (mode === "sync" && playlist.kind === "unheard") {
+			openModal("Sync Unheard to Spotify", h(ConfirmUnheardSync, { count: playlist.songCount, onConfirm: () => actions.syncNew(playlist) }));
+			return;
+		}
+		openModal(
+			mode === "import" ? `Import “${playlist.name}”` : `Sync “${playlist.name}”`,
+			h(DestinationPicker, {
+				sync: jv.sync,
+				mode,
+				playlist,
+				onDone: (uri: string | null) => {
+					refreshLinks();
+					if (uri) open(uri);
+				},
+			}),
 		);
+	};
+
+	const RC = native();
 
 	const rowFor = (playlist: JvPlaylist): any => {
 		const linked = links.filter((link) => link.jvId === playlist.id);
-		const syncedAnywhere = new Set(links.map((link) => link.spotifyUri));
 		const pending = busy[playlist.id];
 		const failing = linked.find((link) => link.error);
 
 		const menu = h(
 			RC.Menu,
 			null,
-			h(RC.MenuItem, { key: "import", onClick: () => void actions.importNew(playlist) }, "Import as a new playlist"),
-			destinationMenu("Import into…", "into", (target) => void actions.importInto(playlist, target), new Set()),
-			playlist.kind === "unheard" ? null : destinationMenu("Sync with…", "with", (target) => void actions.syncWith(playlist, target), syncedAnywhere),
+			h(RC.MenuItem, { key: "import", onClick: () => pick(playlist, "import") }, "Import…"),
+			playlist.kind === "unheard" && linked.length ? null : h(RC.MenuItem, { key: "sync", onClick: () => pick(playlist, "sync") }, linked.length ? "Sync with another playlist…" : "Sync…"),
 			...linked.map((link) =>
 				h(RC.MenuItem, { key: `open-${link.spotifyUri}`, onClick: () => open(link.spotifyUri) }, `Open “${nameOf(link)}”`),
 			),
@@ -185,12 +178,7 @@ export function Playlists({ jv }: { jv: JuiceVaultApi | null }): any {
 			? Button("secondary", pending, { disabled: true })
 			: linked.length
 				? Button("secondary", "Sync now", { onClick: () => void actions.syncNow(playlist, linked) })
-				: Button("primary", "Sync", {
-						onClick: () =>
-							playlist.kind === "unheard"
-								? openModal("Sync Unheard to Spotify", h(ConfirmUnheardSync, { count: playlist.songCount, onConfirm: () => actions.syncNew(playlist) }))
-								: void actions.syncNew(playlist),
-					});
+				: Button("primary", "Sync", { onClick: () => pick(playlist, "sync") });
 
 		return h(
 			"div",
@@ -206,7 +194,7 @@ export function Playlists({ jv }: { jv: JuiceVaultApi | null }): any {
 			h(
 				"div",
 				{ className: "jv-pl-actions" },
-				linked.length || pending ? null : Button("secondary", "Import", { onClick: () => void actions.importNew(playlist) }),
+				linked.length || pending ? null : Button("secondary", "Import", { onClick: () => pick(playlist, "import") }),
 				primary,
 				h(
 					RC.ContextMenu,
