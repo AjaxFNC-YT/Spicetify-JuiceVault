@@ -17,6 +17,8 @@ import { updateProfile, changePassword, listeningStats, type ProfilePatch } from
 import { getDeviceSettings, setDeviceSettings } from "./core/settings/device";
 import { logListen } from "./core/api/history";
 import { Scrobbler } from "./playback/Scrobbler";
+import { PlaylistSync } from "./integration/PlaylistSync";
+import { registerSyncMenu } from "./integration/SyncMenu";
 
 const log = createLogger("boot");
 
@@ -49,6 +51,7 @@ function toTrack(meta: Awaited<ReturnType<typeof getMetadata>>): ShadowTrack {
 		title: meta.title,
 		artist: meta.artist,
 		durationSeconds: meta.duration,
+		album: meta.album ?? null,
 	};
 }
 
@@ -76,7 +79,13 @@ async function main(): Promise<void> {
 	void catalog.load();
 	const session = new Session();
 	void session.loadProfile();
-	session.events.on("signedIn", () => scrobbler.enable());
+	const playlistSync = new PlaylistSync(session);
+	session.events.on("signedIn", () => {
+		scrobbler.enable();
+		playlistSync.start();
+	});
+	if (session.isSignedIn) playlistSync.start();
+	const unregisterSyncMenu = registerSyncMenu(playlistSync, session);
 	const player = new ShadowPlayer();
 	const scrobbler = new Scrobbler(
 		player,
@@ -273,6 +282,7 @@ async function main(): Promise<void> {
 		signIn: (login: string, password: string) => session.signIn(login, password),
 		signOut: () => session.signOut(),
 		me: () => session.user,
+		sync: playlistSync,
 		account: {
 			update: (patch: ProfilePatch) => updateProfile(session, patch),
 			changePassword: (current: string, next: string) => changePassword(session, current, next),
@@ -322,6 +332,8 @@ async function main(): Promise<void> {
 		},
 		dispose: () => {
 			scrobbler.dispose();
+			playlistSync.dispose();
+			unregisterSyncMenu();
 			for (const stop of disposers) stop();
 			equalizer.dispose();
 			interceptor.dispose();

@@ -1,4 +1,5 @@
 import { createLogger } from "../core/log";
+import { albumName } from "../core/settings/device";
 import { coverUrl } from "../core/config";
 import { isJvUri, parseSongId } from "./uri";
 import { peekMetadata } from "../core/api/songs";
@@ -81,13 +82,13 @@ function markPlayable(item: any): void {
 		item.album = {
 			...(item.album ?? {}),
 			type: "album",
-			name: known?.album || "JuiceVault",
+			name: albumName(known?.album),
 			images,
 		};
 		item.images = images;
 		item.metadata = {
 			...(item.metadata ?? {}),
-			album_title: known?.album || "JuiceVault",
+			album_title: albumName(known?.album),
 			image_url: cover,
 			image_small_url: cover,
 			image_large_url: cover,

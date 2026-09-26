@@ -2,6 +2,7 @@ import type { Song } from "../core/models/song";
 import type { Profile } from "../core/auth/session";
 import type { ListeningStats, ProfilePatch } from "../core/api/account";
 import type { DeviceSettings } from "../core/settings/device";
+import type { SyncApi } from "../integration/PlaylistSync";
 
 export interface JuiceVaultApi {
 	catalog: {
@@ -19,6 +20,7 @@ export interface JuiceVaultApi {
 		signOut(): Promise<void>;
 		loadProfile(): Promise<Profile | null>;
 	};
+	sync: SyncApi;
 	account: {
 		update(patch: ProfilePatch): Promise<Profile>;
 		changePassword(current: string, next: string): Promise<void>;

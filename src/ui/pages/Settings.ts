@@ -1,10 +1,15 @@
 import type { Profile } from "../../core/auth/session";
 import { siteUrl } from "../../core/config";
 import { describeError } from "../../core/http/errors";
+import type { AlbumMode } from "../../core/settings/device";
 import type { JuiceVaultApi } from "../bridge";
-import { h, notify, useEffect, useState } from "../h";
+import { h, native, notify, useEffect, useState } from "../h";
+import { Icon } from "../icons";
+import { openModal } from "../modal";
 import { navigate } from "../router";
 import { Button, Toggle } from "../components/controls";
+import { ChangePassword } from "../modals/ChangePassword";
+import { RemoveJvSongs } from "../modals/RemoveJvSongs";
 
 const PRIVACY: Array<{ key: string; label: string }> = [
 	{ key: "privateProfile", label: "Make my profile private" },
@@ -20,18 +25,23 @@ const LIBRARY: Array<{ key: string; label: string }> = [
 	{ key: "hideStems", label: "Stems" },
 ];
 
+const ALBUM_MODES: Array<{ id: AlbumMode; label: string }> = [
+	{ id: "juicevault", label: "JuiceVault" },
+	{ id: "real", label: "The song's real album" },
+	{ id: "custom", label: "Custom" },
+];
+
 function Section(title: string, note: string | null, ...rows: any[]): any {
-	return h(
-		"section",
-		{ className: "jv-set-section" },
-		h("h2", null, title),
-		note ? h("p", { className: "jv-set-note" }, note) : null,
-		...rows,
-	);
+	return h("section", { className: "jv-set-section" }, h("h2", null, title), note ? h("p", { className: "jv-set-note" }, note) : null, ...rows);
 }
 
-function Row(label: string, control: any, key?: string): any {
-	return h("div", { className: "jv-set-row", key }, h("span", { className: "jv-set-label" }, label), control);
+function Row(label: string, control: any, key?: string, hint?: string): any {
+	return h(
+		"div",
+		{ className: "jv-set-row", key },
+		h("span", { className: "jv-set-text" }, h("span", { className: "jv-set-label" }, label), hint ? h("span", { className: "jv-set-hint" }, hint) : null),
+		control,
+	);
 }
 
 export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: Profile }): any {
@@ -39,13 +49,8 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 	const [bio, setBio] = useState(profile.bio ?? "");
 	const [savingProfile, setSavingProfile] = useState(false);
 	const [prefs, setPrefs] = useState<Record<string, unknown>>(profile.preferences ?? {});
-	const [device, setDevice] = useState(jv?.device.get() ?? { resumeOnLaunch: true });
-	const [passwordOpen, setPasswordOpen] = useState(false);
-	const [current, setCurrent] = useState("");
-	const [next, setNext] = useState("");
-	const [confirm, setConfirm] = useState("");
-	const [passwordError, setPasswordError] = useState<string | null>(null);
-	const [savingPassword, setSavingPassword] = useState(false);
+	const [device, setDevice] = useState(jv?.device.get() ?? { resumeOnLaunch: true, albumMode: "juicevault" as AlbumMode, customAlbum: "" });
+	const [customAlbum, setCustomAlbum] = useState(device.customAlbum);
 
 	useEffect(() => setPrefs(profile.preferences ?? {}), [profile.preferences]);
 
@@ -76,24 +81,8 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 		}
 	};
 
-	const savePassword = async (): Promise<void> => {
-		if (!jv || savingPassword) return;
-		if (!current || !next) return setPasswordError("Fill in both password fields.");
-		if (next.length < 8) return setPasswordError("Your new password needs at least 8 characters.");
-		if (next !== confirm) return setPasswordError("The new passwords don't match.");
-
-		setSavingPassword(true);
-		setPasswordError(null);
-		try {
-			await jv.account.changePassword(current, next);
-			await jv.session.signOut();
-			notify("Password changed. Log in again with your new password.");
-			navigate("login", true);
-		} catch (error) {
-			setPasswordError(describeError(error, "Could not change your password."));
-		} finally {
-			setSavingPassword(false);
-		}
+	const updateDevice = (patch: Parameters<JuiceVaultApi["device"]["set"]>[0]): void => {
+		if (jv) setDevice(jv.device.set(patch));
 	};
 
 	const signOut = async (): Promise<void> => {
@@ -102,54 +91,23 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 		navigate("browse", true);
 	};
 
-	const passwordForm = passwordOpen
-		? h(
-				"div",
-				{ className: "jv-set-block" },
-				passwordError ? h("div", { className: "jv-login-error" }, passwordError) : null,
-				h("input", {
-					className: "jv-field",
-					type: "password",
-					placeholder: "Current password",
-					autoComplete: "current-password",
-					value: current,
-					onChange: (event: any) => setCurrent(event.target.value),
-				}),
-				h("input", {
-					className: "jv-field",
-					type: "password",
-					placeholder: "New password",
-					autoComplete: "new-password",
-					value: next,
-					onChange: (event: any) => setNext(event.target.value),
-				}),
-				h("input", {
-					className: "jv-field",
-					type: "password",
-					placeholder: "Confirm new password",
-					autoComplete: "new-password",
-					value: confirm,
-					onChange: (event: any) => setConfirm(event.target.value),
-				}),
-				h(
-					"div",
-					{ className: "jv-set-actions" },
-					Button("secondary", "Cancel", {
-						onClick: () => {
-							setPasswordOpen(false);
-							setPasswordError(null);
-							setCurrent("");
-							setNext("");
-							setConfirm("");
-						},
-					}),
-					Button("primary", savingPassword ? "Saving…" : "Change password", {
-						disabled: savingPassword,
-						onClick: () => void savePassword(),
-					}),
-				),
-			)
-		: null;
+	const RC = native();
+	const albumLabel = ALBUM_MODES.find((mode) => mode.id === device.albumMode)?.label ?? "JuiceVault";
+	const albumMenu = h(
+		RC.Menu,
+		null,
+		ALBUM_MODES.map((mode) =>
+			h(
+				RC.MenuItem,
+				{
+					key: mode.id,
+					onClick: () => updateDevice({ albumMode: mode.id }),
+					trailingIcon: device.albumMode === mode.id ? Icon("check", 16) : undefined,
+				},
+				mode.label,
+			),
+		),
+	);
 
 	return h(
 		"div",
@@ -183,10 +141,7 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 			h(
 				"div",
 				{ className: "jv-set-actions" },
-				Button("primary", savingProfile ? "Saving…" : "Save profile", {
-					disabled: !dirty || savingProfile,
-					onClick: () => void saveProfile(),
-				}),
+				Button("primary", savingProfile ? "Saving…" : "Save profile", { disabled: !dirty || savingProfile, onClick: () => void saveProfile() }),
 			),
 			Row(
 				"Email",
@@ -194,20 +149,19 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 					"span",
 					{ className: "jv-set-value" },
 					profile.email ?? "—",
-					h(
-						"span",
-						{ className: profile.isVerified ? "jv-pill jv-pill--ok" : "jv-pill" },
-						profile.isVerified ? "Verified" : "Not verified",
-					),
+					h("span", { className: profile.isVerified ? "jv-pill jv-pill--ok" : "jv-pill" }, profile.isVerified ? "Verified" : "Not verified"),
 				),
 			),
 			profile.hasPassword === false
-				? Row(
+				? Row("Password", h("a", { className: "jv-link", href: siteUrl("/settings"), target: "_blank", rel: "noopener" }, "Set a password on juicevault.xyz"))
+				: Row(
 						"Password",
-						h("a", { className: "jv-link", href: siteUrl("/settings"), target: "_blank", rel: "noopener" }, "Set a password on juicevault.xyz"),
-					)
-				: Row("Password", passwordOpen ? h("span") : Button("secondary", "Change password", { onClick: () => setPasswordOpen(true) })),
-			passwordForm,
+						Button("secondary", "Change password", {
+							onClick: () => {
+								if (jv) openModal("Change password", h(ChangePassword, { jv }));
+							},
+						}),
+					),
 		),
 		Section(
 			"Privacy",
@@ -220,21 +174,51 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 			"Library",
 			"Choose what appears in the vault. Synced with your JuiceVault account.",
 			...LIBRARY.map((entry) =>
-				Row(
-					entry.label,
-					Toggle(prefs[entry.key] !== true, (value) => void setPreference(entry.key, !value), false, entry.label),
-					entry.key,
-				),
+				Row(entry.label, Toggle(prefs[entry.key] !== true, (value) => void setPreference(entry.key, !value), false, entry.label), entry.key),
+			),
+		),
+		Section(
+			"Playlists",
+			null,
+			Row(
+				"Remove JuiceVault songs from a playlist",
+				Button("secondary", "Choose playlist", {
+					onClick: () => {
+						if (jv) openModal("Remove JuiceVault songs", h(RemoveJvSongs, { sync: jv.sync }));
+					},
+				}),
+				undefined,
+				"Your Spotify songs in that playlist are kept.",
 			),
 		),
 		Section(
 			"This device",
 			null,
 			Row(
+				"Album shown for JuiceVault songs",
+				h(RC.ContextMenu, { menu: albumMenu, trigger: "click", action: "toggle" }, h("button", { className: "jv-select" }, albumLabel, Icon("chevron-down", 16))),
+				undefined,
+				"Used in the player, queue and track lists. The real album is shown when JuiceVault knows it.",
+			),
+			device.albumMode === "custom"
+				? Row(
+						"Custom album name",
+						h("input", {
+							className: "jv-field",
+							maxLength: 60,
+							value: customAlbum,
+							placeholder: "JuiceVault",
+							onChange: (event: any) => setCustomAlbum(event.target.value),
+							onBlur: () => updateDevice({ customAlbum: customAlbum.trim() }),
+							onKeyDown: (event: any) => {
+								if (event.key === "Enter") updateDevice({ customAlbum: customAlbum.trim() });
+							},
+						}),
+					)
+				: null,
+			Row(
 				"Resume the last JuiceVault song when Spotify starts",
-				Toggle(device.resumeOnLaunch, (value) => {
-					if (jv) setDevice(jv.device.set({ resumeOnLaunch: value }));
-				}),
+				Toggle(device.resumeOnLaunch, (value) => updateDevice({ resumeOnLaunch: value })),
 			),
 		),
 		h("div", { className: "jv-set-footer" }, Button("secondary", "Log out", { onClick: () => void signOut() })),

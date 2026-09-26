@@ -1,4 +1,5 @@
 import { createLogger } from "../core/log";
+import { albumName } from "../core/settings/device";
 import { getMetadata } from "../core/api/songs";
 import { isJvUri, parseSongId, buildTrackUri } from "./uri";
 import { getViewOptions, getContextName, onViewOptionsChanged } from "./Playability";
@@ -755,7 +756,7 @@ export class PlayInterceptor {
 				album: {
 					type: "album",
 					uri,
-					name: song.album ?? "JuiceVault",
+					name: albumName(song.album),
 					artist,
 					images: [{ url: song.coverUrl, label: "standard" }],
 				},
@@ -841,6 +842,7 @@ export class PlayInterceptor {
 				title: meta.title,
 				artist: meta.artist,
 				durationSeconds: meta.duration,
+				album: meta.album ?? null,
 			});
 			log.info("playing", meta.title);
 		} catch (error) {

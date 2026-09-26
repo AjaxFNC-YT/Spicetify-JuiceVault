@@ -7,6 +7,7 @@ import { Browse } from "./ui/pages/Browse";
 import { Login } from "./ui/pages/Login";
 import { Profile } from "./ui/pages/Profile";
 import { Settings } from "./ui/pages/Settings";
+import { Playlists } from "./ui/pages/Playlists";
 
 function App(): any {
 	const jv = useApi();
@@ -18,6 +19,7 @@ function App(): any {
 	let page: any;
 	if (view === "login") page = h(Login, { jv });
 	else if (view === "profile") page = profile ? h(Profile, { jv, profile }) : h(Login, { jv, reason: "Log in to see your profile." });
+	else if (view === "playlists") page = profile ? h(Playlists, { jv }) : h(Login, { jv, reason: "Log in to import your JuiceVault playlists." });
 	else if (view === "settings") page = profile ? h(Settings, { jv, profile }) : h(Login, { jv, reason: "Log in to change your settings." });
 	else page = h(Browse, { jv, profile });
 

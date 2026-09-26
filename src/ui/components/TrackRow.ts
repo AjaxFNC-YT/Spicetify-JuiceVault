@@ -1,4 +1,5 @@
 import type { Song, SongCategory } from "../../core/models/song";
+import { albumName } from "../../core/settings/device";
 import { api } from "../bridge";
 import { h, native, notify } from "../h";
 import { Icon } from "../icons";
@@ -86,7 +87,7 @@ export function TrackRow({ song, position, playing, onPlay, playlists, detail }:
 				h("p", { className: "jv-artist" }, song.artist),
 			),
 		),
-		h("div", { className: "jv-album" }, detail ?? (song.album || "JuiceVault")),
+		h("div", { className: "jv-album" }, detail ?? albumName(song.album)),
 		h(
 			"div",
 			{ className: "jv-end" },

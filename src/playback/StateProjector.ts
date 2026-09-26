@@ -1,4 +1,5 @@
 import { coverUrl } from "../core/config";
+import { albumName } from "../core/settings/device";
 import { buildTrackUri } from "../integration/uri";
 import type { ShadowTrack } from "./ShadowPlayer";
 
@@ -45,7 +46,7 @@ export function buildItem(track: ShadowTrack, baselineItem: PlayerState | null, 
 			...(baselineItem?.album ?? {}),
 			type: "album",
 			uri,
-			name: "JuiceVault",
+			name: albumName(track.album),
 			artist,
 			images: [
 				{ url: cover, label: "xlarge" },
@@ -67,7 +68,7 @@ export function buildItem(track: ShadowTrack, baselineItem: PlayerState | null, 
 			...stripMedia(baselineItem?.metadata),
 			title: track.title,
 			artist_name: track.artist,
-			album_title: "JuiceVault",
+			album_title: albumName(track.album),
 			image_url: cover,
 			image_small_url: cover,
 			image_large_url: cover,
