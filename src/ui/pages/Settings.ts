@@ -1,7 +1,7 @@
 import type { Profile } from "../../core/auth/session";
 import { siteUrl } from "../../core/config";
 import { describeError } from "../../core/http/errors";
-import { DEFAULT_TRIM_DB, type AlbumMode } from "../../core/settings/device";
+import { DEFAULT_TRIM_DB, getDeviceSettings, type AlbumMode } from "../../core/settings/device";
 import type { JuiceVaultApi } from "../bridge";
 import { h, native, notify, useEffect, useState } from "../h";
 import { Icon } from "../icons";
@@ -10,6 +10,8 @@ import { navigate } from "../router";
 import { Button, Toggle } from "../components/controls";
 import { ChangePassword } from "../modals/ChangePassword";
 import { RemoveJvSongs } from "../modals/RemoveJvSongs";
+import { GoogleMark } from "../components/brand";
+import type { Connection } from "../../core/api/connections";
 
 const LIBRARY: Array<{ key: string; label: string }> = [
 	{ key: "hideSessions", label: "Studio sessions" },
@@ -44,10 +46,65 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 	const [bio, setBio] = useState(profile.bio ?? "");
 	const [savingProfile, setSavingProfile] = useState(false);
 	const [prefs, setPrefs] = useState<Record<string, unknown>>(profile.preferences ?? {});
-	const [device, setDevice] = useState(jv?.device.get() ?? { resumeOnLaunch: true, showInSearch: true, searchMode: "spotify" as const, fuzzySearch: true, albumMode: "juicevault" as AlbumMode, customAlbum: "", volumeTrimDb: -6, useSpotifyEq: true });
+	const [device, setDevice] = useState(jv?.device.get() ?? getDeviceSettings());
 	const [customAlbum, setCustomAlbum] = useState(device.customAlbum);
+	const [update, setUpdate] = useState(jv?.updates.status() ?? null);
+
+	useEffect(() => {
+		if (!jv) return;
+		setUpdate(jv.updates.status());
+		return jv.updates.on(setUpdate);
+	}, [jv]);
 
 	useEffect(() => setPrefs(profile.preferences ?? {}), [profile.preferences]);
+
+	const [linking, setLinking] = useState<Connection | null>(null);
+
+	const identity = (connection: Connection): string | null => {
+		const value: any = (profile as any)[connection];
+		if (!value) return null;
+		return String(value.username ?? value.globalName ?? value.email ?? value.name ?? "Connected");
+	};
+
+	const link = async (connection: Connection): Promise<void> => {
+		if (!jv || linking) return;
+		setLinking(connection);
+		try {
+			const linked = await jv.connections.link(connection);
+			notify(linked ? `${connection === "discord" ? "Discord" : "Google"} connected` : "Finish linking in your browser, then come back");
+		} catch (error) {
+			notify(describeError(error, "Could not start linking"), true);
+		} finally {
+			setLinking(null);
+		}
+	};
+
+	const disconnect = async (connection: Connection): Promise<void> => {
+		if (!jv) return;
+		try {
+			await jv.connections.unlink(connection);
+			notify(`${connection === "discord" ? "Discord" : "Google"} disconnected`);
+		} catch (error) {
+			notify(describeError(error, "Could not disconnect"), true);
+		}
+	};
+
+	const connectionRow = (connection: Connection, label: string, icon: any): any => {
+		const who = identity(connection);
+		return h(
+			"div",
+			{ className: "jv-set-row", key: connection },
+			h(
+				"span",
+				{ className: "jv-connection" },
+				h("span", { className: `jv-connection-icon jv-connection-icon--${connection}` }, icon),
+				h("span", { className: "jv-set-text" }, h("span", { className: "jv-set-label" }, label), h("span", { className: "jv-set-hint" }, who ? `Connected as ${who}` : "Not connected")),
+			),
+			who
+				? Button("secondary", "Disconnect", { onClick: () => void disconnect(connection) })
+				: Button("secondary", linking === connection ? "Waiting for browser\u2026" : "Connect", { disabled: Boolean(linking), onClick: () => void link(connection) }),
+		);
+	};
 
 	const dirty = displayName !== (profile.displayName ?? "") || bio !== (profile.bio ?? "");
 
@@ -160,6 +217,12 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 					),
 		),
 		Section(
+			"Connected accounts",
+			"Log in with these, or unlink them. Linking opens juicevault.xyz in your browser.",
+			connectionRow("discord", "Discord", Icon("discord", 18)),
+			connectionRow("google", "Google", GoogleMark()),
+		),
+		Section(
 			"Library",
 			"Choose what appears in the vault. Synced with your JuiceVault account.",
 			...LIBRARY.map((entry) =>
@@ -181,8 +244,8 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 			),
 		),
 		Section(
-			"This device",
-			null,
+			"Playback",
+			"These settings only apply to this computer.",
 			Row(
 				"Use Spotify's equalizer for JuiceVault songs",
 				Toggle(device.useSpotifyEq, (value) => updateDevice({ useSpotifyEq: value })),
@@ -212,6 +275,14 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 				"Many leaks are mastered louder than Spotify's songs. Lower this if they sound louder, raise it for quiet ones. Boosts are limited so they never clip.",
 			),
 			Row(
+				"Resume the last JuiceVault song when Spotify starts",
+				Toggle(device.resumeOnLaunch, (value) => updateDevice({ resumeOnLaunch: value })),
+			),
+		),
+		Section(
+			"Display",
+			null,
+			Row(
 				"Album shown for JuiceVault songs",
 				h(RC.ContextMenu, { menu: albumMenu, trigger: "click", action: "toggle" }, h("button", { className: "jv-select" }, albumLabel, Icon("chevron-down", 16))),
 				undefined,
@@ -234,6 +305,60 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 					)
 				: null,
 			Row(
+				"Show song tags",
+				Toggle(device.showTags, (value) => updateDevice({ showTags: value })),
+				undefined,
+				"Labels like SESSION, INST, STEM and CUT next to songs on JuiceVault pages.",
+			),
+			Row(
+				"Show song tags in Spotify lists",
+				Toggle(device.showNativeTags, (value) => updateDevice({ showNativeTags: value })),
+				undefined,
+				"Adds the same labels to JuiceVault songs in Liked Songs, playlists, search and the queue.",
+			),
+			Row(
+				"Colored tags",
+				Toggle(device.coloredTags, (value) => updateDevice({ coloredTags: value })),
+				undefined,
+				"Gives each kind of song its own color.",
+			),
+			Row(
+				"Hide [Cut] in song names",
+				Toggle(device.hideCutMarker, (value) => updateDevice({ hideCutMarker: value })),
+				undefined,
+				"Cut Files still get the CUT tag. Changing this reloads the song list.",
+			),
+			Row(
+				"Automatically show changelog",
+				Toggle(device.autoChangelog, (value) => updateDevice({ autoChangelog: value })),
+				undefined,
+				"Opens new changelog posts as soon as they come out. Each one only shows once.",
+			),
+		),
+		Section(
+			"Menus",
+			"How right-click menus behave for JuiceVault songs.",
+			Row(
+				"Hide options that don't work",
+				Toggle(device.tidyMenus, (value) => updateDevice({ tidyMenus: value })),
+				undefined,
+				"Removes Go to song radio, View credits and Share.",
+			),
+			Row(
+				"Copy Link copies the JuiceVault link",
+				Toggle(device.jvCopyLink, (value) => updateDevice({ jvCopyLink: value })),
+				undefined,
+				"Anyone can open the link on juicevault.xyz to play the song.",
+			),
+			Row(
+				"Show Copy song name",
+				Toggle(device.copySongName, (value) => updateDevice({ copySongName: value })),
+			),
+		),
+		Section(
+			"Search",
+			null,
+			Row(
 				"Show JuiceVault in Spotify search",
 				Toggle(device.showInSearch, (value) => updateDevice({ showInSearch: value })),
 				undefined,
@@ -245,10 +370,38 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 				undefined,
 				"Finds songs even with typos or missing letters, like “lcd drms” for Lucid Dreams.",
 			),
+		),
+		Section(
+			"About",
+			null,
 			Row(
-				"Resume the last JuiceVault song when Spotify starts",
-				Toggle(device.resumeOnLaunch, (value) => updateDevice({ resumeOnLaunch: value })),
+				"Version",
+				h(
+					"span",
+					{ className: "jv-set-value" },
+					update?.current ?? "—",
+					update?.available && update.latest
+						? h("span", { className: "jv-pill" }, `${update.latest.version} available`)
+						: update?.checkedAt && !update.error
+							? h("span", { className: "jv-pill jv-pill--ok" }, "Up to date")
+							: null,
+				),
+				undefined,
+				update?.error ?? undefined,
 			),
+			Row(
+				"Updates",
+				Button("secondary", update?.checking ? "Checking…" : "Check for updates", {
+					disabled: !jv || update?.checking,
+					onClick: () => {
+						if (!jv) return;
+						void jv.updates.check().then((status) => {
+							if (!status.error && !status.available) notify("JuiceVault is up to date");
+						});
+					},
+				}),
+			),
+			Row("Release notes", Button("secondary", "See what's new", { disabled: !jv, onClick: () => void jv?.updates.whatsNew() })),
 		),
 		h("div", { className: "jv-set-footer" }, Button("secondary", "Log out", { onClick: () => void signOut() })),
 	);

@@ -25,6 +25,10 @@ function menuRuntimeReady(): boolean {
 }
 
 export function registerSyncMenu(sync: PlaylistSync, session: Session): () => void {
+	return whenMenuReady("playlist menu", () => build(sync, session));
+}
+
+export function whenMenuReady(label: string, create: () => () => void): () => void {
 	const started = Date.now();
 	let stop: (() => void) | null = null;
 	let timer: number | null = null;
@@ -35,14 +39,14 @@ export function registerSyncMenu(sync: PlaylistSync, session: Session): () => vo
 		if (disposed) return;
 		if (menuRuntimeReady()) {
 			try {
-				stop = build(sync, session);
+				stop = create();
 				return;
 			} catch (error) {
 				log.debug("menu not ready yet", error);
 			}
 		}
 		if (Date.now() - started > GIVE_UP_MS) {
-			log.warn("could not add the JuiceVault playlist menu; Spotify's menu runtime never became ready");
+			log.warn(`could not add the JuiceVault ${label}; Spotify's menu runtime never became ready`);
 			return;
 		}
 		timer = window.setTimeout(attempt, RETRY_MS);

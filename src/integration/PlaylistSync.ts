@@ -1,17 +1,18 @@
 import { createLogger } from "../core/log";
+import { Emitter, type Unsubscribe } from "../core/emitter";
 import { assetUrl, coverUrl } from "../core/config";
 import type { Session } from "../core/auth/session";
-import type { Song } from "../core/models/song";
 import {
 	addSongs,
 	getPlaylist,
 	listPlaylists,
 	removeSongs,
+	UNHEARD_ID,
 	type JvPlaylist,
 	type JvPlaylistDetail,
 } from "../core/api/playlists";
 import { describeError } from "../core/http/errors";
-import { buildTrackUri, isJvUri, parseSongId } from "./uri";
+import { isJvUri, parseSongId, uriForSong as uriFor } from "./uri";
 
 const log = createLogger("PlaylistSync");
 
@@ -23,6 +24,14 @@ const POLL_MS = 2 * 60 * 1000;
 const DEBOUNCE_MS = 1500;
 const PAGE = 500;
 const MASS_CHANGE_MIN = 10;
+const PRUNE_DEBOUNCE_MS = 800;
+
+class PlaylistGoneError extends Error {
+	constructor() {
+		super("That Spotify playlist no longer exists");
+		this.name = "PlaylistGoneError";
+	}
+}
 
 export const LIKED_SONGS_URI = "spotify:collection:tracks";
 
@@ -59,6 +68,8 @@ export interface SyncApi {
 	syncNow(spotifyUri: string, confirm?: boolean): Promise<SyncResult>;
 	syncAll(): Promise<void>;
 	unlink(spotifyUri: string): void;
+	prune(): Promise<void>;
+	onLinks(handler: (links: PlaylistLink[]) => void): Unsubscribe;
 	countJv(spotifyUri: string): Promise<number>;
 	removeAllJv(spotifyUri: string): Promise<number>;
 }
@@ -77,10 +88,6 @@ export function isLikedUri(uri: unknown): boolean {
 
 function normalise(uri: string): string {
 	return isLikedUri(uri) ? LIKED_SONGS_URI : uri;
-}
-
-function uriFor(song: Song): string {
-	return buildTrackUri({ songId: song.id, artist: song.artist, title: song.title, durationSeconds: song.durationSeconds });
 }
 
 function chunks<T>(list: T[], size: number): T[][] {
@@ -149,6 +156,9 @@ export class PlaylistSync implements SyncApi {
 	private poll: number | null = null;
 	private raw: Record<string, AnyFn> = {};
 	private hooked: Array<{ target: any; key: string; descriptor?: PropertyDescriptor }> = [];
+	private readonly events = new Emitter<{ links: PlaylistLink[] }>();
+	private pruneTimer: number | null = null;
+	private stopRootlist: (() => void) | null = null;
 
 	constructor(private readonly session: Session) {
 		this.captureRaw();
@@ -208,6 +218,7 @@ export class PlaylistSync implements SyncApi {
 		} catch (error) {
 			log.warn("could not save sync links", error);
 		}
+		this.events.emit("links", this.links());
 	}
 
 	list(): Promise<JvPlaylist[]> {
@@ -235,14 +246,29 @@ export class PlaylistSync implements SyncApi {
 		return [{ uri: LIKED_SONGS_URI, name: "Liked Songs" }, ...playlists];
 	}
 
+	private async inLibrary(spotifyUri: string): Promise<boolean> {
+		const contents = await this.rootlist.getContents({ limit: 500 });
+		const walk = (items: any[]): boolean =>
+			(items ?? []).some((item) => (item?.type === "folder" ? walk(item.items) : normalise(item?.uri ?? "") === spotifyUri));
+		return walk(contents?.items ?? []);
+	}
+
+	private async readPage(spotifyUri: string, offset: number): Promise<any> {
+		try {
+			return await this.playlistApi.getContents(spotifyUri, { offset, limit: PAGE });
+		} catch (error) {
+			if (!/invalid playlist response/i.test(error instanceof Error ? error.message : "")) throw error;
+			if (!(await this.inLibrary(spotifyUri))) throw new PlaylistGoneError();
+			return { items: [], totalLength: offset };
+		}
+	}
+
 	private async readDestination(spotifyUri: string): Promise<JvItem[]> {
 		const liked = isLikedUri(spotifyUri);
 		const all: any[] = [];
 
 		for (let offset = 0; offset < 100000; ) {
-			const page = liked
-				? await this.libraryApi.getTracks({ offset, limit: PAGE })
-				: await this.playlistApi.getContents(spotifyUri, { offset, limit: PAGE });
+			const page = liked ? await this.libraryApi.getTracks({ offset, limit: PAGE }) : await this.readPage(spotifyUri, offset);
 			const items: any[] = page?.items ?? [];
 			all.push(...items);
 
@@ -343,6 +369,7 @@ export class PlaylistSync implements SyncApi {
 	}
 
 	async syncWith(spotifyUri: string, jvId: string, name: string): Promise<SyncResult> {
+		if (jvId === UNHEARD_ID) throw new Error("Unheard can only sync to its own new playlist. Use Sync on the Unheard page.");
 		const uri = normalise(spotifyUri);
 		this.store[uri] = { spotifyUri: uri, jvId, name, jvName: "", lastSynced: null, snapshot: [], error: null };
 		this.write();
@@ -352,6 +379,55 @@ export class PlaylistSync implements SyncApi {
 	unlink(spotifyUri: string): void {
 		delete this.store[normalise(spotifyUri)];
 		this.write();
+	}
+
+	onLinks(handler: (links: PlaylistLink[]) => void): Unsubscribe {
+		return this.events.on("links", handler);
+	}
+
+	async prune(): Promise<void> {
+		const linked = this.links().filter((link) => !isLikedUri(link.spotifyUri));
+		if (!linked.length) return;
+
+		const present = new Set<string>();
+		const walk = (items: any[]): void => {
+			for (const item of items ?? []) {
+				if (item?.type === "folder") walk(item.items);
+				else if (item?.uri) present.add(normalise(item.uri));
+			}
+		};
+		const contents = await this.rootlist.getContents({ limit: 5000 });
+		if (!Array.isArray(contents?.items)) return;
+		if (Number.isFinite(contents.totalLength) && contents.items.length < contents.totalLength) return;
+		walk(contents.items);
+
+		const gone = linked.filter((link) => !present.has(link.spotifyUri));
+		if (!gone.length) return;
+		for (const link of gone) {
+			log.info(`"${link.name}" was deleted in Spotify, so it is no longer synced`);
+			delete this.store[link.spotifyUri];
+		}
+		this.write();
+	}
+
+	private schedulePrune(): void {
+		if (this.pruneTimer !== null) window.clearTimeout(this.pruneTimer);
+		this.pruneTimer = window.setTimeout(() => {
+			this.pruneTimer = null;
+			void this.prune().catch((error) => log.debug("could not check for deleted playlists", error));
+		}, PRUNE_DEBOUNCE_MS);
+	}
+
+	private watchRootlist(): void {
+		const events = this.rootlist?.getEvents?.();
+		if (typeof events?.addListener !== "function") return;
+		const handler = (): void => this.schedulePrune();
+		events.addListener("update", handler);
+		events.addListener("operation_complete", handler);
+		this.stopRootlist = () => {
+			events.removeListener?.("update", handler);
+			events.removeListener?.("operation_complete", handler);
+		};
 	}
 
 	async syncNow(spotifyUri: string, confirm = false): Promise<SyncResult> {
@@ -371,6 +447,11 @@ export class PlaylistSync implements SyncApi {
 			this.write();
 			return result;
 		} catch (error) {
+			if (error instanceof PlaylistGoneError) {
+				log.info(`"${link.name}" was deleted in Spotify, so it is no longer synced`);
+				this.unlink(uri);
+				return empty;
+			}
 			const message = error instanceof Error ? error.message : String(error);
 			if (this.store[uri]) this.store[uri] = { ...this.store[uri]!, error: message };
 			this.write();
@@ -451,6 +532,7 @@ export class PlaylistSync implements SyncApi {
 
 	async syncAll(): Promise<void> {
 		if (!this.session.isSignedIn) return;
+		await this.prune().catch((error) => log.debug("could not check for deleted playlists", error));
 		for (const link of this.links()) {
 			try {
 				await this.syncNow(link.spotifyUri);
@@ -532,6 +614,8 @@ export class PlaylistSync implements SyncApi {
 			this.hook(Spicetify.Platform.ListPlatformAPI, "removeAll", false);
 		}
 
+		if (!this.stopRootlist) this.watchRootlist();
+
 		if (this.poll === null) {
 			void this.syncAll();
 			this.poll = window.setInterval(() => void this.syncAll(), POLL_MS);
@@ -541,6 +625,10 @@ export class PlaylistSync implements SyncApi {
 	dispose(): void {
 		if (this.poll !== null) window.clearInterval(this.poll);
 		this.poll = null;
+		this.stopRootlist?.();
+		this.stopRootlist = null;
+		if (this.pruneTimer !== null) window.clearTimeout(this.pruneTimer);
+		this.pruneTimer = null;
 		for (const timer of this.debounces.values()) window.clearTimeout(timer);
 		this.debounces.clear();
 		for (const { target, key, descriptor } of this.hooked) {

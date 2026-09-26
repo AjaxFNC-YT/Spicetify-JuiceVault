@@ -1,6 +1,32 @@
+import { getDeviceSettings } from "../settings/device";
 import { assetUrl, coverUrl } from "../config";
 
 export type SongCategory = "main" | "instrumental" | "remaster" | "stem" | "released" | "cut";
+
+export type SongKind = SongCategory | "session";
+
+const TAGS: Partial<Record<SongKind, string>> = {
+	session: "session",
+	instrumental: "inst",
+	remaster: "remaster",
+	stem: "stem",
+	released: "released",
+	cut: "cut",
+};
+
+const CUT_MARKER = /\s*[[({]\s*cut\s*[\])}]\s*$/i;
+
+export function cleanTitle(title: string, category?: string | null): string {
+	return category === "cut" && getDeviceSettings().hideCutMarker ? title.replace(CUT_MARKER, "").trim() || title : title;
+}
+
+export function songKind(song: { category: SongCategory; isSessionEdit: boolean }): SongKind {
+	return song.category === "main" && song.isSessionEdit ? "session" : song.category;
+}
+
+export function songTag(song: { category: SongCategory; isSessionEdit: boolean }): string | null {
+	return TAGS[songKind(song)] ?? null;
+}
 
 export interface Song {
 	id: string;
@@ -46,7 +72,7 @@ export function toSong(raw: any, fallbackCategory: SongCategory = "main"): Song 
 
 	return {
 		id: raw.id,
-		title: typeof raw.title === "string" && raw.title ? raw.title : "Unknown",
+		title: typeof raw.title === "string" && raw.title ? cleanTitle(raw.title, raw.category ?? fallbackCategory) : "Unknown",
 		artist: typeof raw.artist === "string" && raw.artist ? raw.artist : "Juice WRLD",
 		album: typeof raw.album === "string" ? raw.album : null,
 		year: Number.isFinite(raw.year) ? Number(raw.year) : null,

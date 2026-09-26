@@ -1,6 +1,6 @@
 import { createLogger } from "../log";
 import { listAll, rememberMetadata, searchRemote } from "../api/songs";
-import type { Song, SongCategory } from "../models/song";
+import { cleanTitle, type Song, type SongCategory } from "../models/song";
 import { loadSongs, saveSongs, clearCache } from "./store";
 import { SearchIndex, displaySong, type SearchResult } from "./search";
 import { getDeviceSettings } from "../settings/device";
@@ -52,7 +52,7 @@ export class Catalog {
 
 	private async run(force: boolean): Promise<void> {
 		if (!force) {
-			const cached = await loadSongs(CACHE_TTL_MS);
+			const cached = (await loadSongs(CACHE_TTL_MS))?.map((song) => ({ ...song, title: cleanTitle(song.title, song.category) }));
 			if (cached?.length) {
 				this.apply(cached, "cache");
 				log.info(`loaded ${cached.length} songs from cache`);

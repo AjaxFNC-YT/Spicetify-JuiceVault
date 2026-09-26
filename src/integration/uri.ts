@@ -23,6 +23,10 @@ export function buildTrackUri(parts: JvTrackUriParts): string {
 	return `spotify:local:${artist}:${album}:${title}:${duration}`;
 }
 
+export function uriForSong(song: { id: string; artist: string; title: string; durationSeconds: number }): string {
+	return buildTrackUri({ songId: song.id, artist: song.artist, title: song.title, durationSeconds: song.durationSeconds });
+}
+
 export function isJvUri(uri: unknown): uri is string {
 	return typeof uri === "string" && uri.startsWith("spotify:local:") && uri.includes(`:${JV_PREFIX}`);
 }

@@ -31,6 +31,18 @@ export function useProfile(jv: JuiceVaultApi | null): Profile | null {
 	return profile;
 }
 
+export function useUnseenChangelog(jv: JuiceVaultApi | null): boolean {
+	const [unseenNews, setUnseenNews] = useState(jv?.news.hasUnseen() ?? false);
+
+	useEffect(() => {
+		if (!jv) return;
+		setUnseenNews(jv.news.hasUnseen());
+		return jv.onNews(setUnseenNews);
+	}, [jv]);
+
+	return unseenNews;
+}
+
 export function useNowPlaying(): string | null {
 	const [songId, setSongId] = useState<string | null>(null);
 

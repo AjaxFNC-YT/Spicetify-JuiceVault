@@ -99,6 +99,19 @@ export class Session {
 		return this.profile as Profile;
 	}
 
+	async signInWithTokens(accessToken: string, refreshToken: string): Promise<Profile> {
+		this.tokens = saveTokens(accessToken, refreshToken);
+		const profile = await this.loadProfile();
+		if (!profile) {
+			this.tokens = null;
+			clearTokens();
+			throw new Error("Signed in, but JuiceVault didn't return your account.");
+		}
+		log.info("signed in as", profile.username);
+		this.events.emit("signedIn", profile);
+		return profile;
+	}
+
 	setProfile(profile: Profile | null): void {
 		this.profile = profile;
 		this.events.emit("profile", profile);

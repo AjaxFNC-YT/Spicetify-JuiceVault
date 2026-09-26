@@ -22,6 +22,8 @@ export interface ShadowPlayerEvents {
 	ended: ShadowTrack;
 	stopped: ShadowTrack;
 	stalled: ShadowTrack;
+	seeking: number;
+	seeked: number;
 	volume: number;
 	error: { track: ShadowTrack | null; message: string };
 }
@@ -76,6 +78,9 @@ export class ShadowPlayer {
 				if (this.track) this.events.emit("stalled", this.track);
 			});
 		}
+
+		this.audio.addEventListener("seeking", () => this.events.emit("seeking", this.audio.currentTime));
+		this.audio.addEventListener("seeked", () => this.events.emit("seeked", this.audio.currentTime));
 
 		this.audio.addEventListener("volumechange", () => {
 			this.events.emit("volume", this.audio.volume);

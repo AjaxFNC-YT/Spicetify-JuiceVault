@@ -1,3 +1,5 @@
+import { Emitter } from "../emitter";
+
 const KEY = "juicevault:device";
 
 export const DEFAULT_TRIM_DB = -6;
@@ -11,8 +13,16 @@ export interface DeviceSettings {
 	fuzzySearch: boolean;
 	volumeTrimDb: number;
 	useSpotifyEq: boolean;
+	autoChangelog: boolean;
 	albumMode: AlbumMode;
 	customAlbum: string;
+	showTags: boolean;
+	showNativeTags: boolean;
+	coloredTags: boolean;
+	hideCutMarker: boolean;
+	tidyMenus: boolean;
+	jvCopyLink: boolean;
+	copySongName: boolean;
 }
 
 const DEFAULTS: DeviceSettings = {
@@ -22,9 +32,23 @@ const DEFAULTS: DeviceSettings = {
 	fuzzySearch: true,
 	volumeTrimDb: DEFAULT_TRIM_DB,
 	useSpotifyEq: true,
+	autoChangelog: true,
 	albumMode: "juicevault",
 	customAlbum: "",
+	showTags: true,
+	showNativeTags: true,
+	coloredTags: false,
+	hideCutMarker: true,
+	tidyMenus: true,
+	jvCopyLink: true,
+	copySongName: true,
 };
+
+const changes = new Emitter<{ changed: { settings: DeviceSettings; patch: Partial<DeviceSettings> } }>();
+
+export function onDeviceSettings(handler: (change: { settings: DeviceSettings; patch: Partial<DeviceSettings> }) => void): () => void {
+	return changes.on("changed", handler);
+}
 
 export function getDeviceSettings(): DeviceSettings {
 	try {
@@ -42,6 +66,7 @@ export function setDeviceSettings(patch: Partial<DeviceSettings>): DeviceSetting
 	} catch {
 		return next;
 	}
+	changes.emit("changed", { settings: next, patch });
 	return next;
 }
 

@@ -6,6 +6,8 @@ import { h, native, notify, useCallback, useEffect, useState } from "../h";
 import { Icon } from "../icons";
 import { Button } from "../components/controls";
 import { PlaylistCover } from "../components/PlaylistCover";
+import { openModal } from "../modal";
+import { ConfirmUnheardSync } from "../modals/ConfirmUnheardSync";
 
 declare const Spicetify: any;
 
@@ -44,6 +46,13 @@ export function Playlists({ jv }: { jv: JuiceVaultApi | null }): any {
 	const [error, setError] = useState<string | null>(null);
 
 	const refreshLinks = useCallback(() => setLinks(jv?.sync.links() ?? []), [jv]);
+
+	useEffect(() => {
+		if (!jv) return;
+		refreshLinks();
+		void jv.sync.prune().catch(() => undefined);
+		return jv.sync.onLinks(setLinks);
+	}, [jv]);
 
 	useEffect(() => {
 		if (!jv) return;
@@ -141,7 +150,7 @@ export function Playlists({ jv }: { jv: JuiceVaultApi | null }): any {
 			null,
 			h(RC.MenuItem, { key: "import", onClick: () => void actions.importNew(playlist) }, "Import as a new playlist"),
 			destinationMenu("Import into…", "into", (target) => void actions.importInto(playlist, target), new Set()),
-			destinationMenu("Sync with…", "with", (target) => void actions.syncWith(playlist, target), syncedAnywhere),
+			playlist.kind === "unheard" ? null : destinationMenu("Sync with…", "with", (target) => void actions.syncWith(playlist, target), syncedAnywhere),
 			...linked.map((link) =>
 				h(RC.MenuItem, { key: `open-${link.spotifyUri}`, onClick: () => open(link.spotifyUri) }, `Open “${nameOf(link)}”`),
 			),
@@ -176,7 +185,12 @@ export function Playlists({ jv }: { jv: JuiceVaultApi | null }): any {
 			? Button("secondary", pending, { disabled: true })
 			: linked.length
 				? Button("secondary", "Sync now", { onClick: () => void actions.syncNow(playlist, linked) })
-				: Button("primary", "Sync", { onClick: () => void actions.syncNew(playlist) });
+				: Button("primary", "Sync", {
+						onClick: () =>
+							playlist.kind === "unheard"
+								? openModal("Sync Unheard to Spotify", h(ConfirmUnheardSync, { count: playlist.songCount, onConfirm: () => actions.syncNew(playlist) }))
+								: void actions.syncNew(playlist),
+					});
 
 		return h(
 			"div",

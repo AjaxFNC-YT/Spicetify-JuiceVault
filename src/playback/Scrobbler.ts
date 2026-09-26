@@ -1,6 +1,6 @@
 import { createLogger } from "../core/log";
 import { ApiError } from "../core/http/errors";
-import type { Unsubscribe } from "../core/emitter";
+import { Emitter, type Unsubscribe } from "../core/emitter";
 import type { Listen } from "../core/api/history";
 import type { ShadowPlayer, ShadowTrack } from "./ShadowPlayer";
 
@@ -9,7 +9,8 @@ const log = createLogger("Scrobbler");
 const EARLY_CHECKPOINT_SECONDS = 30;
 const COMPLETION_RATIO = 0.7;
 const MIN_FINAL_SECONDS = 5;
-const MAX_TICK_SECONDS = 2.5;
+const TICK_TOLERANCE_SECONDS = 0.35;
+const RESTART_POSITION_SECONDS = 1;
 
 type Send = (listen: Listen, keepalive: boolean) => Promise<void>;
 
@@ -21,6 +22,8 @@ interface Play {
 	sent: number;
 	earlySent: boolean;
 	completeSent: boolean;
+	completionReported: boolean;
+	intervals: Array<[number, number]>;
 }
 
 function newSessionId(): string {
@@ -30,8 +33,11 @@ function newSessionId(): string {
 }
 
 export class Scrobbler {
+	readonly events = new Emitter<{ completed: string }>();
 	private play: Play | null = null;
 	private lastPosition = 0;
+	private lastWall = 0;
+	private seeking = false;
 	private disabled = false;
 	private sentCount = 0;
 	private lastError: string | null = null;
@@ -45,9 +51,11 @@ export class Scrobbler {
 		const { events } = player;
 		this.unsubscribes.push(
 			events.on("loading", (track) => this.begin(track)),
-			events.on("play", () => {
-				this.lastPosition = this.player.position;
+			events.on("play", () => this.anchor(this.player.position)),
+			events.on("seeking", () => {
+				this.seeking = true;
 			}),
+			events.on("seeked", (position) => this.onSeeked(position)),
 			events.on("progress", ({ position }) => this.tick(position)),
 			events.on("pause", () => this.flush(false)),
 			events.on("ended", () => this.finish(false)),
@@ -69,22 +77,54 @@ export class Scrobbler {
 			sent: 0,
 			earlySent: false,
 			completeSent: false,
+			completionReported: false,
+			intervals: [],
 		};
-		this.lastPosition = 0;
+		this.anchor(0);
+	}
+
+	private anchor(position: number): void {
+		this.lastPosition = position;
+		this.lastWall = performance.now();
+		this.seeking = false;
+	}
+
+	private onSeeked(position: number): void {
+		const play = this.play;
+		const track = this.player.current;
+		if (play && track && position < RESTART_POSITION_SECONDS && play.listened >= MIN_FINAL_SECONDS) {
+			this.begin(track);
+		}
+		this.anchor(position);
+	}
+
+	private cover(from: number, to: number): number {
+		const play = this.play!;
+		const merged: Array<[number, number]> = [];
+		for (const range of [...play.intervals, [from, to] as [number, number]].sort((a, b) => a[0] - b[0])) {
+			const last = merged[merged.length - 1];
+			if (last && range[0] <= last[1] + 0.05) last[1] = Math.max(last[1], range[1]);
+			else merged.push([range[0], range[1]]);
+		}
+		play.intervals = merged;
+		return merged.reduce((total, [start, end]) => total + (end - start), 0);
 	}
 
 	private tick(position: number): void {
 		const play = this.play;
-		if (!play || !this.player.isPlaying) {
-			this.lastPosition = position;
-			return;
-		}
-
-		const delta = position - this.lastPosition;
+		const now = performance.now();
+		const wall = (now - this.lastWall) / 1000;
+		const previous = this.lastPosition;
 		this.lastPosition = position;
-		if (delta <= 0 || delta > MAX_TICK_SECONDS) return;
+		this.lastWall = now;
 
-		play.listened += delta;
+		if (!play || !this.player.isPlaying || this.seeking) return;
+
+		const delta = position - previous;
+		const rate = this.player.element.playbackRate || 1;
+		if (delta <= 0 || delta > wall * rate + TICK_TOLERANCE_SECONDS) return;
+
+		play.listened = this.cover(previous, position);
 		const duration = this.player.duration || play.duration;
 		if (duration > 0) play.duration = duration;
 
@@ -122,6 +162,10 @@ export class Scrobbler {
 			this.sentCount += 1;
 			this.lastError = null;
 			log.debug(`logged ${duration}s of ${play.songId}`);
+			if (!play.completionReported && play.duration > 0 && duration >= play.duration * COMPLETION_RATIO) {
+				play.completionReported = true;
+				this.events.emit("completed", play.songId);
+			}
 		} catch (error) {
 			if (error instanceof ApiError && error.status === 409) {
 				play.playSessionId = newSessionId();
@@ -142,7 +186,16 @@ export class Scrobbler {
 
 	get diagnostics(): Record<string, unknown> {
 		return {
-			active: this.play ? { songId: this.play.songId, listened: Math.round(this.play.listened), sent: this.play.sent } : null,
+			active: this.play
+				? {
+						songId: this.play.songId,
+						heard: Math.round(this.play.listened),
+						of: Math.round(this.play.duration),
+						percent: this.play.duration ? Math.round((this.play.listened / this.play.duration) * 100) : 0,
+						sent: this.play.sent,
+						ranges: this.play.intervals.map(([start, end]) => `${Math.round(start)}-${Math.round(end)}`),
+					}
+				: null,
 			sentCount: this.sentCount,
 			disabled: this.disabled,
 			lastError: this.lastError,

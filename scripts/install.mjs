@@ -32,15 +32,16 @@ if (!apps.includes("juicevault")) {
 	console.log("registered custom app");
 }
 
-const extensions = spicetify("config", "extensions");
-if (extensions.includes("juicevault.js")) {
-	spicetify("config", "extensions", "juicevault.js-");
-	console.log("removed the standalone extension registration");
+const extensions = spicetify("config", "extensions").split(/s+/);
+for (const legacy of ["JuiceVault.js", "juicevault.js"]) {
+	if (!extensions.includes(legacy)) continue;
+	spicetify("config", "extensions", `${legacy}-`);
+	console.log(`removed the ${legacy} extension registration`);
 }
 
-const legacy = join(spicetifyRoot, "Extensions", "juicevault.js");
-if (existsSync(legacy)) {
-	rmSync(legacy);
+const legacyFile = join(spicetifyRoot, "Extensions", "JuiceVault.js");
+if (existsSync(legacyFile)) {
+	rmSync(legacyFile);
 	console.log("removed the legacy extension file");
 }
 

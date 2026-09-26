@@ -1,6 +1,8 @@
 import type { Session } from "../auth/session";
 import { toSong, type Song } from "../models/song";
 
+declare const Spicetify: any;
+
 interface Envelope<T> {
 	success: boolean;
 	data: T;
@@ -31,6 +33,31 @@ export const LIKED_ID = "liked";
 export const UNHEARD_ID = "unheard";
 
 const LIKES_PAGE = 200;
+const UNHEARD_CACHE_KEY = "juicevault:unheard-ids";
+
+let unheardInFlight: Promise<any> | null = null;
+
+export function forgetUnheardRequest(): void {
+	unheardInFlight = null;
+}
+
+export function cachedUnheardIds(): string[] {
+	try {
+		const raw = Spicetify.LocalStorage.get(UNHEARD_CACHE_KEY);
+		const parsed = raw ? JSON.parse(raw) : null;
+		return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : [];
+	} catch {
+		return [];
+	}
+}
+
+function rememberUnheard(ids: string[]): void {
+	try {
+		Spicetify.LocalStorage.set(UNHEARD_CACHE_KEY, JSON.stringify(ids));
+	} catch {
+		return;
+	}
+}
 const ADD_BATCH = 100;
 
 function isLocalId(id: unknown): boolean {
@@ -122,11 +149,20 @@ export async function getPlaylist(session: Session, id: string, summary?: JvPlay
 		return { ...base, songs, songCount: songs.length, recentSongIds: songs.slice(0, 4).map((song) => song.id) };
 	}
 
-	const path = id === UNHEARD_ID ? "/user/playlists/unheard" : `/user/playlists/${encodeURIComponent(id)}`;
-	const result = await session.authed<Envelope<any>>(path);
+	let result: Envelope<any>;
+	if (id === UNHEARD_ID) {
+		unheardInFlight ??= session.authed<Envelope<any>>("/user/playlists/unheard").finally(() => {
+			unheardInFlight = null;
+		});
+		result = await unheardInFlight;
+	} else {
+		result = await session.authed<Envelope<any>>(`/user/playlists/${encodeURIComponent(id)}`);
+	}
 	const raw = result?.data ?? {};
 	const songs = songsFrom(raw.songs ?? []);
 	const base = summarise(raw, summary?.isCollaborator ?? false);
+
+	if (id === UNHEARD_ID) rememberUnheard(songs.map((song) => song.id));
 
 	return {
 		...base,

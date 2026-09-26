@@ -8,7 +8,7 @@ import { PlaylistCover } from "../components/PlaylistCover";
 export type PickerMode = "import" | "sync";
 
 function subtitle(playlist: JvPlaylist, mode: PickerMode): string {
-	if (playlist.kind === "unheard") return mode === "sync" ? "Updates from JuiceVault only" : "Archive songs you haven't finished";
+	if (playlist.kind === "unheard") return mode === "sync" ? "Syncs only as its own playlist • use the Unheard page" : "Archive songs you haven't finished";
 	if (playlist.kind === "liked") return `Liked songs • ${playlist.songCount.toLocaleString()} songs`;
 	return `${playlist.isCollaborator ? "Collaborative" : playlist.isPublic ? "Public" : "Private"} • ${playlist.songCount.toLocaleString()} songs`;
 }
@@ -76,7 +76,7 @@ export function SourcePicker({ sync, mode, destination }: { sync: SyncApi; mode:
 							{
 								key: playlist.id,
 								className: "jv-modal-row",
-								disabled: Boolean(busy),
+								disabled: Boolean(busy) || (mode === "sync" && playlist.kind === "unheard"),
 								"data-current": String(current?.jvId === playlist.id),
 								onClick: () => void choose(playlist),
 							},

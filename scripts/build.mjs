@@ -14,6 +14,7 @@ const shared = {
 	sourcemap: false,
 	legalComments: "none",
 	logLevel: "info",
+	define: { __JV_VERSION__: JSON.stringify(pkg.version) },
 };
 
 export const extensionOptions = {

@@ -10,16 +10,26 @@ import { traceForJv } from "./integration/trace";
 import { buildTrackUri, isJvUri, parseSongId } from "./integration/uri";
 import { PlayInterceptor } from "./integration/PlayInterceptor";
 import { Playability } from "./integration/Playability";
-import { getMetadata } from "./core/api/songs";
+import { forgetMetadata, getMetadata } from "./core/api/songs";
 import { Catalog } from "./core/catalog/catalog";
 import { Session } from "./core/auth/session";
 import { updateProfile, changePassword, listeningStats, listeningActivity, type ProfilePatch } from "./core/api/account";
 import { getDeviceSettings, setDeviceSettings } from "./core/settings/device";
-import { logListen } from "./core/api/history";
+import { logListen, getHistory, communityLeaderboard } from "./core/api/history";
+import { cachedUnheardIds, forgetUnheardRequest, getPlaylist, UNHEARD_ID } from "./core/api/playlists";
 import { Scrobbler } from "./playback/Scrobbler";
 import { PlaylistSync } from "./integration/PlaylistSync";
 import { registerSyncMenu } from "./integration/SyncMenu";
+import { registerTrackMenu } from "./integration/TrackMenu";
+import { registerNativeTags } from "./integration/NativeTags";
+import { applyCuration, curationTargets } from "./integration/curation";
+import { knownAlbum, onAlbums, requestAlbums } from "./core/catalog/albums";
+import { onDeviceSettings } from "./core/settings/device";
 import { SearchInjector } from "./integration/SearchInjector";
+import { Announcements } from "./integration/Announcements";
+import { Updates, type UpdateStatus } from "./integration/Updates";
+import { linkUrl, unlink, type Connection } from "./core/api/connections";
+import { openInBrowser } from "./core/auth/oauth";
 
 const log = createLogger("boot");
 
@@ -88,6 +98,11 @@ async function main(): Promise<void> {
 	const disposers: Array<() => void> = [];
 	const catalog = new Catalog();
 	void catalog.load();
+	onDeviceSettings(({ patch }) => {
+		if (patch.hideCutMarker === undefined) return;
+		forgetMetadata();
+		void catalog.load(true);
+	});
 	const session = new Session();
 	void session.loadProfile();
 	const playlistSync = new PlaylistSync(session);
@@ -96,7 +111,11 @@ async function main(): Promise<void> {
 		guard("playlist sync", () => playlistSync.start(), undefined);
 	});
 	const searchInjector = new SearchInjector();
+	const announcements = new Announcements();
+	const updates = new Updates();
 	let unregisterSyncMenu: () => void = () => {};
+	let unregisterTrackMenu: () => void = () => {};
+	let unregisterNativeTags: () => void = () => {};
 	const player = new ShadowPlayer();
 	const scrobbler = new Scrobbler(
 		player,
@@ -104,6 +123,16 @@ async function main(): Promise<void> {
 		() => session.isSignedIn,
 	);
 	window.addEventListener("beforeunload", () => scrobbler.finish(true));
+	scrobbler.events.on("completed", (songId) => {
+		forgetUnheardRequest();
+		for (const link of playlistSync.links()) {
+			if (link.jvId !== UNHEARD_ID) continue;
+			void playlistSync
+				.syncNow(link.spotifyUri)
+				.then(() => log.debug(`unheard updated after finishing ${songId}`))
+				.catch((error) => log.warn("could not update the synced Unheard playlist", error));
+		}
+	});
 	const queue = new Queue();
 
 	let advance: (direction: 1 | -1) => void = () => {};
@@ -308,6 +337,28 @@ async function main(): Promise<void> {
 		signOut: () => session.signOut(),
 		me: () => session.user,
 		sync: playlistSync,
+		news: announcements.news,
+		onNews: (handler: (unseen: boolean) => void) => announcements.events.on("news", handler),
+		connections: {
+			link: async (connection: Connection): Promise<boolean> => {
+				openInBrowser(await linkUrl(session, connection));
+				const started = Date.now();
+				while (Date.now() - started < 3 * 60 * 1000) {
+					await new Promise((resolve) => setTimeout(resolve, 3000));
+					const profile = await session.loadProfile();
+					if (profile?.[connection]) return true;
+				}
+				return false;
+			},
+			unlink: (connection: Connection) => unlink(session, connection),
+		},
+		history: {
+			list: (limit?: number, offset?: number) => getHistory(session, limit, offset),
+		},
+		leaderboard: () => communityLeaderboard(),
+		unheard: async () => (await getPlaylist(session, UNHEARD_ID)).songs,
+		unheardCached: () => cachedUnheardIds().map((id) => catalog.get(id)).filter((song): song is NonNullable<typeof song> => Boolean(song)),
+		onListenCompleted: (handler: (songId: string) => void) => scrobbler.events.on("completed", handler),
 		account: {
 			update: (patch: ProfilePatch) => updateProfile(session, patch),
 			changePassword: (current: string, next: string) => changePassword(session, current, next),
@@ -325,6 +376,21 @@ async function main(): Promise<void> {
 			const uri = await trackUriFor(songId);
 			await Spicetify.Platform.PlaylistAPI.add(playlistUri, [uri], { before: "end" });
 			return uri;
+		},
+		updates: {
+			status: () => updates.status,
+			check: () => updates.check(true),
+			whatsNew: () => updates.whatsNew(),
+			on: (handler: (status: UpdateStatus) => void) => updates.events.on("status", handler),
+		},
+		albums: {
+			get: knownAlbum,
+			request: requestAlbums,
+			on: onAlbums,
+		},
+		curation: {
+			targets: async (songId: string) => curationTargets(await trackUriFor(songId)),
+			apply: async (songId: string, add: string[], remove: string[]) => applyCuration(await trackUriFor(songId), add, remove),
 		},
 		async saveToLiked(songId: string): Promise<void> {
 			const uri = await trackUriFor(songId);
@@ -363,7 +429,11 @@ async function main(): Promise<void> {
 			scrobbler.dispose();
 			playlistSync.dispose();
 			unregisterSyncMenu();
+			unregisterTrackMenu();
+			unregisterNativeTags();
 			searchInjector.dispose();
+			announcements.dispose();
+			updates.dispose();
 			for (const stop of disposers) stop();
 			equalizer.dispose();
 			interceptor.dispose();
@@ -378,7 +448,11 @@ async function main(): Promise<void> {
 	window.JuiceVault = api;
 
 	guard("search", () => searchInjector.start(), undefined);
+	guard("updates", () => updates.start(), undefined);
+	guard("announcements", () => announcements.start(), undefined);
 	unregisterSyncMenu = guard("playlist menu", () => registerSyncMenu(playlistSync, session), () => {});
+	unregisterTrackMenu = guard("track menu", () => registerTrackMenu(catalog), () => {});
+	unregisterNativeTags = guard("native tags", () => registerNativeTags(catalog), () => {});
 	if (session.isSignedIn) guard("playlist sync", () => playlistSync.start(), undefined);
 
 	const saved = loadSession();

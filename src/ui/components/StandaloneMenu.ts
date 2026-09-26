@@ -25,7 +25,7 @@ const ITEM_HEIGHT = 40;
 const SUBMENU_MAX = 420;
 const LAYER_ID = "juicevault-overlay-layer";
 
-function overlayLayer(): HTMLElement {
+export function overlayLayer(): HTMLElement {
 	let layer = document.getElementById(LAYER_ID);
 	if (!layer) {
 		layer = document.createElement("div");

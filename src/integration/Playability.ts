@@ -1,5 +1,6 @@
 import { createLogger } from "../core/log";
-import { albumName } from "../core/settings/device";
+import { albumName, getDeviceSettings } from "../core/settings/device";
+import { knownAlbum, requestAlbums } from "../core/catalog/albums";
 import { coverUrl } from "../core/config";
 import { isJvUri, parseSongId } from "./uri";
 import { peekMetadata } from "../core/api/songs";
@@ -89,13 +90,13 @@ function markPlayable(item: any): void {
 		item.album = {
 			...(item.album ?? {}),
 			type: "album",
-			name: albumName(known?.album),
+			name: albumName(known?.album ?? knownAlbum(songId)),
 			images,
 		};
 		item.images = images;
 		item.metadata = {
 			...(item.metadata ?? {}),
-			album_title: albumName(known?.album),
+			album_title: albumName(known?.album ?? knownAlbum(songId)),
 			image_url: cover,
 			image_small_url: cover,
 			image_large_url: cover,
@@ -104,6 +105,27 @@ function markPlayable(item: any): void {
 	}
 
 	if (item.track) markPlayable(item.track);
+}
+
+const ALBUM_WAIT_MS = 2000;
+
+function jvSongIds(payload: any): string[] {
+	const ids: string[] = [];
+	const items: any[] = Array.isArray(payload) ? payload : (payload?.items ?? []);
+	for (const item of items) {
+		for (const uri of [item?.uri, item?.track?.uri, item?.item?.uri]) {
+			const songId = isJvUri(uri) ? parseSongId(uri) : null;
+			if (songId) ids.push(songId);
+		}
+	}
+	return ids;
+}
+
+async function withAlbums(payload: any): Promise<void> {
+	if (getDeviceSettings().albumMode !== "real") return;
+	const ids = jvSongIds(payload);
+	if (!ids.length) return;
+	await Promise.race([requestAlbums(ids), new Promise((resolve) => setTimeout(resolve, ALBUM_WAIT_MS))]);
 }
 
 function deepMark(payload: any): any {
@@ -229,7 +251,8 @@ export class Playability {
 								this.patchCount += 1;
 								this.calls.unshift({ label, at: new Date().toISOString().slice(11, 19), arg: "callback", itemCount: -1, jvCount: -1 });
 								this.calls = this.calls.slice(0, 12);
-								return arg(...callbackArgs.map((value) => deepMark(value)));
+								for (const value of callbackArgs) void withAlbums(value).catch(() => undefined);
+							return arg(...callbackArgs.map((value) => deepMark(value)));
 							}
 						: arg,
 				);
@@ -264,6 +287,7 @@ export class Playability {
 				}
 				const result = await original(...args);
 				this.patchCount += 1;
+				await withAlbums(result).catch(() => undefined);
 				const items: any[] = result?.items ?? (Array.isArray(result) ? result : []);
 				let options: unknown = null;
 				try {

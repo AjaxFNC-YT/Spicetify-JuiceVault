@@ -52,10 +52,13 @@ export interface ListeningActivity {
 	currentStreak: number;
 	longestStreak: number;
 	activeDays: number;
+	avgDailyPlays?: number;
+	daily?: Array<{ date: string; plays: number; duration: number }>;
+	hourly?: Array<{ hour: number; count: number }>;
 }
 
 export async function listeningActivity(session: Session): Promise<ListeningActivity | null> {
-	const result = await session.authed<Envelope<ListeningActivity>>("/user/history/activity?days=730");
+	const result = await session.authed<Envelope<ListeningActivity>>("/user/history/activity?days=371");
 	return result?.data ?? null;
 }
 

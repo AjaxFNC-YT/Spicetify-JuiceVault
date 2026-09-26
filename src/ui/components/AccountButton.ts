@@ -23,8 +23,7 @@ export function AccountButton(jv: JuiceVaultApi | null, profile: Profile | null)
 		RC.Menu,
 		null,
 		h(RC.MenuItem, { key: "profile", onClick: () => navigate("profile") }, "Profile"),
-		h(RC.MenuItem, { key: "playlists", onClick: () => navigate("playlists") }, "Your playlists"),
-		h(RC.MenuItem, { key: "settings", onClick: () => navigate("settings") }, "Settings"),
+		h(RC.MenuItem, { key: "settings", onClick: () => navigate("settings"), divider: "after" }, "Settings"),
 		h(RC.MenuItem, { key: "logout", onClick: () => void signOut() }, "Log out"),
 	);
 

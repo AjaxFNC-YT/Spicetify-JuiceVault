@@ -123,7 +123,12 @@ export function Profile({ jv, profile }: { jv: JuiceVaultApi | null; profile: Pr
 		h(
 			"section",
 			{ className: "jv-section" },
-			h("h2", { className: "jv-h2" }, "Listening"),
+			h(
+				"div",
+				{ className: "jv-section-head" },
+				h("h2", { className: "jv-h2" }, "Listening"),
+				h("button", { className: "jv-link", onClick: () => navigate("stats") }, "See your stats"),
+			),
 			h(
 				"div",
 				{ className: "jv-stats" },

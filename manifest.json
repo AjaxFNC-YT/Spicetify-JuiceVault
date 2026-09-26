@@ -1,0 +1,21 @@
+{
+	"name": "JuiceVault",
+	"description": "The Juice WRLD archive inside Spotify. Play unreleased songs in Spotify's own player, queue and playlists, sync your JuiceVault playlists, search the vault and track your listening.",
+	"preview": "preview.png",
+	"readme": "README.md",
+	"authors": [
+		{
+			"name": "AjaxFNC",
+			"url": "https://github.com/AjaxFNC-YT"
+		},
+		{
+			"name": "Rubixo",
+			"url": ""
+		},
+		{
+			"name": "Prototbh",
+			"url": "https://github.com/prototbh"
+		}
+	],
+	"tags": ["juice wrld", "unreleased", "music", "vault", "custom app"]
+}

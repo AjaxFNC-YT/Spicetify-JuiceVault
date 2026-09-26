@@ -1,3 +1,4 @@
+import { NativeScope } from "../ui/nativeScope";
 import { createLogger } from "../core/log";
 import { getDeviceSettings, setDeviceSettings } from "../core/settings/device";
 import { h } from "../ui/h";
@@ -104,7 +105,7 @@ export class SearchInjector {
 	private render(query: string): void {
 		if (!this.host) return;
 		const ReactDOM = Spicetify.ReactDOM;
-		const element = h(SearchPanel, { query, mode: this.mode, onMode: this.setMode });
+		const element = h(NativeScope, { anchor: this.host.parentElement }, h(SearchPanel, { query, mode: this.mode, onMode: this.setMode }));
 
 		if (typeof ReactDOM.createRoot === "function") {
 			if (!this.root) this.root = ReactDOM.createRoot(this.host);

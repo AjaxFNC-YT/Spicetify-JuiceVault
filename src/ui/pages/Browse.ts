@@ -1,4 +1,4 @@
-import type { Song, SongCategory } from "../../core/models/song";
+import { songKind, type Song, type SongKind } from "../../core/models/song";
 import type { Profile } from "../../core/auth/session";
 import { LOGO } from "../../assets/logo";
 import type { JuiceVaultApi } from "../bridge";
@@ -8,11 +8,12 @@ import { useQueryParam } from "../router";
 import { Icon } from "../icons";
 import { TrackHeader, TrackRow } from "../components/TrackRow";
 
-type Filter = SongCategory | "all";
+type Filter = SongKind | "all";
 
 const CATEGORIES: Array<{ id: Filter; label: string; hideKey?: string }> = [
 	{ id: "all", label: "Everything" },
 	{ id: "main", label: "Unreleased" },
+	{ id: "session", label: "Sessions", hideKey: "hideSessions" },
 	{ id: "released", label: "Released", hideKey: "hideReleased" },
 	{ id: "cut", label: "Cut Files", hideKey: "hideCutFiles" },
 	{ id: "remaster", label: "Remasters", hideKey: "hideRemasters" },
@@ -61,7 +62,8 @@ export function Browse({ jv, profile }: { jv: JuiceVaultApi | null; profile: Pro
 
 	const hidden = useMemo(() => hiddenCategories(profile), [profile]);
 	const hideSessions = profile?.preferences?.hideSessions === true;
-	const options = CATEGORIES.filter((entry) => !hidden.has(entry.id));
+	const mergeSessions = profile?.preferences?.mergeSessions === true;
+	const options = CATEGORIES.filter((entry) => !hidden.has(entry.id) && !(mergeSessions && entry.id === "session"));
 
 	useEffect(() => {
 		if (hidden.has(category)) setCategory("all");
@@ -78,9 +80,14 @@ export function Browse({ jv, profile }: { jv: JuiceVaultApi | null; profile: Pro
 	const filtered = useMemo(() => {
 		let list: Song[] = query.trim() && jv ? jv.catalog.searchSongs(query, 1000) : songs;
 		list = list.filter((song) => !hidden.has(song.category) && !(hideSessions && song.isSessionEdit));
-		if (category !== "all") list = list.filter((song) => song.category === category);
+		if (category !== "all") {
+			list = list.filter((song) => {
+				const kind = songKind(song);
+				return (mergeSessions && kind === "session" ? "main" : kind) === category;
+			});
+		}
 		return list;
-	}, [songs, query, category, hidden, hideSessions, jv]);
+	}, [songs, query, category, hidden, hideSessions, mergeSessions, jv]);
 
 	const label = options.find((entry) => entry.id === category)?.label ?? "Everything";
 	const shown = filtered.slice(0, visible);

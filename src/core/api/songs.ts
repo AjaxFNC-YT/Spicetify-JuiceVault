@@ -1,5 +1,6 @@
 import { get } from "../http/client";
-import { toSong, toSongs, type Song, type SongCategory } from "../models/song";
+import { assetUrl } from "../config";
+import { cleanTitle, toSong, toSongs, type Song, type SongCategory } from "../models/song";
 
 export interface SongMetadata {
 	id: string;
@@ -12,6 +13,7 @@ export interface SongMetadata {
 	bitrate?: number;
 	cover?: string;
 	play_count?: number;
+	category?: string;
 }
 
 const CATEGORY_PATHS: Record<SongCategory, string> = {
@@ -24,13 +26,21 @@ const CATEGORY_PATHS: Record<SongCategory, string> = {
 };
 
 const metadataCache = new Map<string, SongMetadata>();
+const fetched = new Set<string>();
 
 export async function getMetadata(songId: string): Promise<SongMetadata> {
 	const hit = metadataCache.get(songId);
-	if (hit) return hit;
-	const meta = await get<SongMetadata>(`/music/${encodeURIComponent(songId)}/metadata`);
+	if (hit && fetched.has(songId)) return hit;
+	const raw = await get<SongMetadata>(`/music/${encodeURIComponent(songId)}/metadata`);
+	const meta = { ...raw, title: cleanTitle(raw.title, raw.category), cover: assetUrl(raw.cover) ?? undefined };
 	metadataCache.set(songId, meta);
+	fetched.add(songId);
 	return meta;
+}
+
+export function forgetMetadata(): void {
+	metadataCache.clear();
+	fetched.clear();
 }
 
 export function peekMetadata(songId: string): SongMetadata | undefined {
@@ -38,6 +48,7 @@ export function peekMetadata(songId: string): SongMetadata | undefined {
 }
 
 export function rememberMetadata(song: Song): void {
+	if (fetched.has(song.id)) return;
 	const previous = metadataCache.get(song.id);
 	metadataCache.set(song.id, {
 		...(previous ?? {}),

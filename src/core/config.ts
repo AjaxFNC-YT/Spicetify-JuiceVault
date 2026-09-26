@@ -10,14 +10,28 @@ export interface DevConfig {
 	sampleSongId: string;
 }
 
+export interface GithubConfig {
+	repo: string;
+	branch: string;
+}
+
 export interface AppConfig {
 	api: ApiConfig;
+	github: GithubConfig;
 	siteUrl: string;
 	debug: boolean;
 	dev: DevConfig;
 }
 
 export const config: AppConfig = raw as AppConfig;
+
+export function repoUrl(path = ""): string {
+	return `https://github.com/${config.github.repo}${path}`;
+}
+
+export function installCommand(): string {
+	return `iwr -useb https://raw.githubusercontent.com/${config.github.repo}/${config.github.branch}/install.ps1 | iex`;
+}
 
 export function streamUrl(songId: string): string {
 	const base = config.api.baseUrl.replace(/\/+$/, "");
