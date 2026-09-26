@@ -14,6 +14,7 @@ export interface RequestOptions {
 	timeoutMs?: number;
 	retries?: number;
 	signal?: AbortSignal;
+	keepalive?: boolean;
 }
 
 function baseUrl(): string {
@@ -69,6 +70,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 				},
 				body: options.body ? JSON.stringify(options.body) : undefined,
 				signal: controller.signal,
+				keepalive: options.keepalive ?? false,
 			});
 
 			if (response.ok) return (await parse(response)) as T;

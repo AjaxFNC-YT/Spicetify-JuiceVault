@@ -7,5 +7,6 @@
 	"debug": true,
 	"dev": {
 		"sampleSongId": "dbfc1729-6918-48a2-888d-703072961b74"
-	}
+	},
+	"siteUrl": "https://juicevault.xyz"
 }

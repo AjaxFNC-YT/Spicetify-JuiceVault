@@ -32,3 +32,15 @@ export class TimeoutError extends Error {
 		this.name = "TimeoutError";
 	}
 }
+
+export function describeError(error: unknown, fallback: string): string {
+	if (error instanceof ApiError) {
+		const body = error.body as { error?: unknown; message?: unknown } | undefined;
+		if (typeof body?.error === "string" && body.error) return body.error;
+		if (typeof body?.message === "string" && body.message) return body.message;
+		if (error.isRateLimited) return "Too many attempts. Try again in a few minutes.";
+	}
+	if (error instanceof TimeoutError) return "JuiceVault took too long to respond.";
+	if (error instanceof Error && error.message) return error.message;
+	return fallback;
+}

@@ -1,4 +1,4 @@
-import { config, coverUrl, streamUrl } from "./core/config";
+import { config, coverUrl } from "./core/config";
 import { createLogger } from "./core/log";
 import { ShadowPlayer, type ShadowTrack } from "./playback/ShadowPlayer";
 import { Arbiter } from "./playback/Arbiter";
@@ -12,6 +12,11 @@ import { PlayInterceptor } from "./integration/PlayInterceptor";
 import { Playability } from "./integration/Playability";
 import { getMetadata } from "./core/api/songs";
 import { Catalog } from "./core/catalog/catalog";
+import { Session } from "./core/auth/session";
+import { updateProfile, changePassword, listeningStats, type ProfilePatch } from "./core/api/account";
+import { getDeviceSettings, setDeviceSettings } from "./core/settings/device";
+import { logListen } from "./core/api/history";
+import { Scrobbler } from "./playback/Scrobbler";
 
 const log = createLogger("boot");
 
@@ -69,7 +74,16 @@ async function main(): Promise<void> {
 	const disposers: Array<() => void> = [];
 	const catalog = new Catalog();
 	void catalog.load();
+	const session = new Session();
+	void session.loadProfile();
+	session.events.on("signedIn", () => scrobbler.enable());
 	const player = new ShadowPlayer();
+	const scrobbler = new Scrobbler(
+		player,
+		(listen, keepalive) => logListen(session, listen, keepalive),
+		() => session.isSignedIn,
+	);
+	window.addEventListener("beforeunload", () => scrobbler.finish(true));
 	const queue = new Queue();
 
 	let advance: (direction: 1 | -1) => void = () => {};
@@ -90,7 +104,7 @@ async function main(): Promise<void> {
 
 	const streamAllowsWebAudio = async (): Promise<boolean> => {
 		try {
-			const response = await fetch(streamUrl(config.dev.sampleSongId), { headers: { Range: "bytes=0-1" } });
+			const response = await fetch(`${config.api.baseUrl.replace(/\/+$/, "")}/health`);
 			return Boolean(response.headers.get("access-control-allow-origin"));
 		} catch {
 			return false;
@@ -237,7 +251,7 @@ async function main(): Promise<void> {
 			arbiter.release();
 			clearSession();
 		},
-		session: () => loadSession(),
+		savedSession: () => loadSession(),
 		clearSession,
 		status: () => ({
 			track: player.current,
@@ -246,6 +260,8 @@ async function main(): Promise<void> {
 			duration: Math.round(player.duration),
 			volume: player.volume,
 			catalog: catalog.diagnostics,
+			session: session.diagnostics,
+			scrobbler: scrobbler.diagnostics,
 			...arbiter.diagnostics,
 			interceptor: interceptor.diagnostics,
 			playability: playability.diagnostics,
@@ -253,6 +269,19 @@ async function main(): Promise<void> {
 		interceptor,
 		playability,
 		catalog,
+		session,
+		signIn: (login: string, password: string) => session.signIn(login, password),
+		signOut: () => session.signOut(),
+		me: () => session.user,
+		account: {
+			update: (patch: ProfilePatch) => updateProfile(session, patch),
+			changePassword: (current: string, next: string) => changePassword(session, current, next),
+			stats: () => listeningStats(session),
+		},
+		device: {
+			get: getDeviceSettings,
+			set: setDeviceSettings,
+		},
 		search: (query: string, limit?: number) => catalog.search(query, limit).map((result) => result.song),
 		reloadCatalog: () => catalog.load(true),
 		queue,
@@ -292,6 +321,7 @@ async function main(): Promise<void> {
 			return arbiter.diagnostics;
 		},
 		dispose: () => {
+			scrobbler.dispose();
 			for (const stop of disposers) stop();
 			equalizer.dispose();
 			interceptor.dispose();
@@ -306,7 +336,7 @@ async function main(): Promise<void> {
 	window.JuiceVault = api;
 
 	const saved = loadSession();
-	if (saved) await restore(saved);
+	if (saved && getDeviceSettings().resumeOnLaunch) await restore(saved);
 
 	let settleTicks = 0;
 	const settleTimer = window.setInterval(() => {

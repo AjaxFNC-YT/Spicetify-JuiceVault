@@ -18,6 +18,7 @@ export interface ShadowPlayerEvents {
 	pause: ShadowTrack;
 	progress: { position: number; duration: number };
 	ended: ShadowTrack;
+	stopped: ShadowTrack;
 	stalled: ShadowTrack;
 	volume: number;
 	error: { track: ShadowTrack | null; message: string };
@@ -160,6 +161,7 @@ export class ShadowPlayer {
 	}
 
 	stop(): void {
+		if (this.track) this.events.emit("stopped", this.track);
 		this.audio.pause();
 		this.audio.removeAttribute("src");
 		this.audio.load();
