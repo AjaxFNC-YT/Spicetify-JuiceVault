@@ -22,6 +22,18 @@ export function getViewOptions(uri: string): any | null {
 	return viewOptions.get(uri) ?? null;
 }
 
+const contextNames = new Map<string, string>();
+
+export function recordContextName(uri: string, name: unknown): void {
+	if (typeof uri !== "string" || typeof name !== "string" || !name) return;
+	contextNames.set(uri, name);
+}
+
+export function getContextName(uri: string): string | null {
+	if (uri === "spotify:collection:tracks") return "Liked Songs";
+	return contextNames.get(uri) ?? null;
+}
+
 type AnyFn = (...args: any[]) => any;
 
 function markPlayable(item: any): void {
@@ -128,6 +140,8 @@ export class Playability {
 				deepMark(payload);
 				fixCounts(payload);
 				fixCounts(payload?.metadata);
+				const uri = payload?.uri ?? payload?.metadata?.uri;
+				recordContextName(uri, payload?.name ?? payload?.metadata?.name);
 				return payload;
 			},
 			(args: any[]) => {
@@ -147,6 +161,7 @@ export class Playability {
 		this.patchAsync(Spicetify.Platform.PlaylistAPI, "getMetadata", "playlist.getMetadata", (payload: any) => {
 			fixCounts(payload);
 			fixCounts(payload?.metadata);
+			recordContextName(payload?.uri ?? payload?.metadata?.uri, payload?.name ?? payload?.metadata?.name);
 			return payload;
 		});
 		log.info("installed on", [...this.patched.keys()].join(", ") || "nothing");

@@ -1,7 +1,7 @@
 import { createLogger } from "../core/log";
 import { getMetadata } from "../core/api/songs";
 import { isJvUri, parseSongId } from "./uri";
-import { getViewOptions } from "./Playability";
+import { getViewOptions, getContextName } from "./Playability";
 import type { ShadowPlayer } from "../playback/ShadowPlayer";
 import type { Arbiter } from "../playback/Arbiter";
 import type { Queue } from "../playback/Queue";
@@ -535,6 +535,7 @@ export class PlayInterceptor {
 		this.arbiter.setPlaybackContext({
 			uid: target.uid,
 			contextUri: target.contextUri,
+			contextName: target.contextUri ? (getContextName(target.contextUri) ?? undefined) : undefined,
 			index: target.index,
 		});
 
@@ -612,7 +613,12 @@ export class PlayInterceptor {
 			}
 
 			this.queue.load(items, Math.max(0, index), contextUri);
-			this.arbiter.setPlaybackContext({ ...(this.arbiter.playbackContext ?? {}), contextUri });
+			this.arbiter.setPlaybackContext({
+				...(this.arbiter.playbackContext ?? {}),
+				contextUri,
+				contextName: getContextName(contextUri) ?? undefined,
+			});
+			this.announceContext(contextUri);
 			log.debug(`queue loaded: ${items.length} items from ${contextUri}, start ${index}`);
 			this.syncQueueStore();
 			this.scheduleSettledAssert(900);
@@ -620,6 +626,22 @@ export class PlayInterceptor {
 			log.warn("could not load queue from context", error);
 			this.queue.clear();
 			this.contextUri = undefined;
+		}
+	}
+
+	private announceContext(contextUri: string): void {
+		if (!this.arbiter.isClaimed) return;
+		const update = this.api?.updateContext;
+		if (typeof update !== "function") return;
+
+		for (const shape of [{ uri: contextUri }, contextUri]) {
+			try {
+				update.call(this.api, shape);
+				log.debug("announced context to Spotify:", contextUri);
+				return;
+			} catch {
+				continue;
+			}
 		}
 	}
 

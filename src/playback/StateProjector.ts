@@ -7,6 +7,7 @@ type PlayerState = Record<string, any>;
 export interface PlaybackContext {
 	uid?: string;
 	contextUri?: string;
+	contextName?: string;
 	index?: number;
 }
 
@@ -109,7 +110,12 @@ export function buildState(input: ProjectionInput): PlayerState {
 	state.item = buildItem(input.track, input.baseline?.item ?? null, input.context);
 
 	if (input.context?.contextUri) {
-		state.context = { ...(state.context ?? {}), uri: input.context.contextUri };
+		const metadata = { ...(state.context?.metadata ?? {}) };
+		if (input.context.contextName) {
+			metadata.context_description = input.context.contextName;
+			metadata.context_uri = input.context.contextUri;
+		}
+		state.context = { ...(state.context ?? {}), uri: input.context.contextUri, metadata };
 	}
 	if (typeof input.context?.index === "number") {
 		state.index = { pageIndex: 0, itemIndex: input.context.index };
