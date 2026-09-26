@@ -1,4 +1,4 @@
-import { config, coverUrl } from "./core/config";
+import { config, coverUrl, streamUrl } from "./core/config";
 import { createLogger } from "./core/log";
 import { ShadowPlayer, type ShadowTrack } from "./playback/ShadowPlayer";
 import { Arbiter } from "./playback/Arbiter";
@@ -85,7 +85,29 @@ async function main(): Promise<void> {
 	const eqSnapshot = readEqualizer();
 	const equalizer = new Equalizer(player.element, eqSnapshot?.frequencies);
 
-	if (equalizer.attach()) {
+	const streamAllowsWebAudio = async (): Promise<boolean> => {
+		try {
+			const response = await fetch(streamUrl(config.dev.sampleSongId), { headers: { Range: "bytes=0-1" } });
+			return Boolean(response.headers.get("access-control-allow-origin"));
+		} catch {
+			return false;
+		}
+	};
+
+	const webAudioSafe = await streamAllowsWebAudio();
+
+	if (!webAudioSafe) {
+		log.warn(
+			"equalizer disabled: api.juicevault.xyz does not send Access-Control-Allow-Origin. " +
+				"Web Audio would silence the stream. Add the header to enable EQ.",
+		);
+	}
+
+	if (webAudioSafe) {
+		player.element.crossOrigin = "anonymous";
+	}
+
+	if (webAudioSafe && equalizer.attach()) {
 		const applyEq = (): void => {
 			const snapshot = readEqualizer();
 			if (!snapshot) return;
@@ -95,8 +117,6 @@ async function main(): Promise<void> {
 		const stopEqWatch = watchEqualizer(() => applyEq());
 		player.events.on("play", () => void equalizer.resume());
 		disposers.push(stopEqWatch);
-	} else {
-		log.warn("equalizer unavailable; JuiceVault audio will not be processed");
 	}
 
 	playability.install();
@@ -125,7 +145,10 @@ async function main(): Promise<void> {
 		});
 	};
 
-	player.events.on("play", () => persist(true));
+	player.events.on("play", () => {
+		persist(true);
+		interceptor.syncQueueStore();
+	});
 	player.events.on("pause", () => persist(true));
 	player.events.on("stalled", () => persist(true));
 	player.events.on("progress", () => persist(false));
@@ -133,7 +156,17 @@ async function main(): Promise<void> {
 
 	const restore = async (saved: SavedSession): Promise<void> => {
 		try {
-			if (saved.contextUri) await interceptor.adoptContext(saved.contextUri, undefined);
+			const restoredUri = buildTrackUri({
+				songId: saved.songId,
+				artist: saved.artist,
+				title: saved.title,
+				durationSeconds: saved.durationSeconds,
+			});
+
+			if (saved.contextUri) {
+				await interceptor.adoptContext(saved.contextUri, { uid: saved.uid, uri: restoredUri });
+				queue.syncTo(saved.uid, restoredUri);
+			}
 			queue.setShuffle(saved.shuffle);
 			queue.setRepeat((saved.repeat ?? 0) as 0 | 1 | 2);
 			arbiter.setPlaybackContext({ uid: saved.uid, contextUri: saved.contextUri });
@@ -142,6 +175,7 @@ async function main(): Promise<void> {
 				off();
 				player.seek(saved.positionSeconds);
 				arbiter.push(true);
+				interceptor.syncQueueStore();
 			});
 
 			await player.load(
@@ -230,6 +264,7 @@ async function main(): Promise<void> {
 		},
 		dumpQueue: () => interceptor.inspectQueue(),
 		dumpQueueStore: () => interceptor.inspectQueueStore(),
+		bootLog: () => interceptor.bootLog,
 		trace: (seconds?: number) => traceForJv(seconds),
 		dumpEqualizer: () => describeEqualizer(),
 		dumpPlaylist: (uri: string) => playability.inspectPlaylist(uri),
@@ -258,6 +293,14 @@ async function main(): Promise<void> {
 
 	const saved = loadSession();
 	if (saved) await restore(saved);
+
+	let settleTicks = 0;
+	const settleTimer = window.setInterval(() => {
+		settleTicks += 1;
+		interceptor.syncQueueStore();
+		if (settleTicks >= 20) window.clearInterval(settleTimer);
+	}, 750);
+	disposers.push(() => window.clearInterval(settleTimer));
 
 	log.info("ready — try JuiceVault.play() in this console");
 }

@@ -5,6 +5,23 @@ import { peekMetadata } from "../core/api/songs";
 
 const log = createLogger("Playability");
 
+const viewOptions = new Map<string, any>();
+
+export function recordViewOptions(uri: string, options: any): void {
+	if (!uri || !options || typeof options !== "object") return;
+	if (!options.sort && !options.filter) return;
+	viewOptions.set(uri, {
+		filter: options.filter ?? "",
+		sort: options.sort ?? null,
+		filterPredicates: options.filterPredicates ?? [],
+		descriptorFilter: options.descriptorFilter ?? [],
+	});
+}
+
+export function getViewOptions(uri: string): any | null {
+	return viewOptions.get(uri) ?? null;
+}
+
 type AnyFn = (...args: any[]) => any;
 
 function markPlayable(item: any): void {
@@ -103,12 +120,22 @@ export class Playability {
 
 	install(): void {
 		this.patchAsync(Spicetify.Platform.PlaylistAPI, "getContents", "playlist.getContents", patchCollection);
-		this.patchAsync(Spicetify.Platform.PlaylistAPI, "getPlaylist", "playlist.getPlaylist", (payload: any) => {
-			deepMark(payload);
-			fixCounts(payload);
-			fixCounts(payload?.metadata);
-			return payload;
-		});
+		this.patchAsync(
+			Spicetify.Platform.PlaylistAPI,
+			"getPlaylist",
+			"playlist.getPlaylist",
+			(payload: any) => {
+				deepMark(payload);
+				fixCounts(payload);
+				fixCounts(payload?.metadata);
+				return payload;
+			},
+			(args: any[]) => {
+				const uri = typeof args[0] === "string" ? args[0] : args[0]?.uri;
+				const options = args.find((arg) => arg && typeof arg === "object" && (arg.sort || arg.filter !== undefined));
+				if (uri) recordViewOptions(uri, options);
+			},
+		);
 		this.patchAsync(Spicetify.Platform.PlaylistAPI, "getItem", "playlist.getItem", patchCollection);
 		this.patchAsync(Spicetify.Platform.LibraryAPI, "getTracks", "library.getTracks", patchCollection);
 		this.patchAsync(Spicetify.Platform.LocalFilesAPI, "getTracks", "localFiles.getTracks", patchCollection);
@@ -169,7 +196,13 @@ export class Playability {
 		});
 	}
 
-	private patchAsync(target: any, key: string, label: string, transform: (payload: any) => any): void {
+	private patchAsync(
+		target: any,
+		key: string,
+		label: string,
+		transform: (payload: any) => any,
+		onCall?: (args: any[]) => void,
+	): void {
 		if (!target || typeof target[key] !== "function") return;
 		if (this.patched.has(label)) return;
 
@@ -179,15 +212,28 @@ export class Playability {
 
 		Object.defineProperty(target, key, {
 			value: async (...args: any[]) => {
+				try {
+					onCall?.(args);
+				} catch {
+					/* diagnostics only */
+				}
 				const result = await original(...args);
 				this.patchCount += 1;
 				const items: any[] = result?.items ?? (Array.isArray(result) ? result : []);
+				let options: unknown = null;
+				try {
+					options = args.length > 1 ? JSON.parse(JSON.stringify(args.slice(1))) : null;
+				} catch {
+					options = "unserialisable";
+				}
 				this.calls.unshift({
 					label,
 					at: new Date().toISOString().slice(11, 19),
 					arg: typeof args[0] === "string" ? args[0] : (args[0]?.uri ?? null),
+					options,
 					itemCount: items.length,
 					jvCount: items.filter((item: any) => isJvUri(item?.uri)).length,
+					firstUris: items.slice(0, 6).map((item: any) => item?.name ?? item?.uri ?? null),
 				});
 				this.calls = this.calls.slice(0, 12);
 				return transform(result);

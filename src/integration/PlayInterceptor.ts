@@ -1,6 +1,7 @@
 import { createLogger } from "../core/log";
 import { getMetadata } from "../core/api/songs";
 import { isJvUri, parseSongId } from "./uri";
+import { getViewOptions } from "./Playability";
 import type { ShadowPlayer } from "../playback/ShadowPlayer";
 import type { Arbiter } from "../playback/Arbiter";
 import type { Queue } from "../playback/Queue";
@@ -77,6 +78,13 @@ export class PlayInterceptor {
 	private lastEmittedQueue: unknown = null;
 	private unsubscribeQueue: (() => void) | null = null;
 	private lastQueueAssert = 0;
+	private reassertWindow = 0;
+	private reassertsInWindow = 0;
+	private settleTimer: number | null = null;
+	private adopting: string | null = null;
+	private shadowedService: any = null;
+	private shadowedApi: any = null;
+	private boot: Array<Record<string, unknown>> = [];
 
 	constructor(
 		private readonly player: ShadowPlayer,
@@ -126,6 +134,7 @@ export class PlayInterceptor {
 		this.shadowQueueService();
 		this.watchUpdates();
 		this.watchQueueUpdates();
+		this.syncFromCurrentState();
 		log.info("installed");
 	}
 
@@ -154,6 +163,8 @@ export class PlayInterceptor {
 		if (!service || typeof service.getQueue !== "function") return;
 
 		const original = service.getQueue.bind(service);
+		this.shadowedService = service;
+		this.shadowedApi = this.api;
 		this.originals.set("service.getQueue", original);
 		this.shadowedTargets.push({ target: service, key: "getQueue" });
 
@@ -228,7 +239,49 @@ export class PlayInterceptor {
 		return shaped;
 	}
 
+	private snapshot(tag: string): void {
+		const api = this.api;
+		const service = api?._queue;
+		this.boot.push({
+			t: new Date().toISOString().slice(11, 23),
+			tag,
+			ownsQueue: this.ownsQueue,
+			queueSize: this.queue.size,
+			contextUri: this.contextUri ?? null,
+			claimed: this.arbiter.isClaimed,
+			apiSame: api === this.shadowedApi,
+			serviceSame: service === this.shadowedService,
+			playShadowed: api ? Object.prototype.hasOwnProperty.call(api, "play") : null,
+			getQueueShadowed: api ? Object.prototype.hasOwnProperty.call(api, "getQueue") : null,
+			serviceGetQueueShadowed: service ? Object.prototype.hasOwnProperty.call(service, "getQueue") : null,
+			stateCurrent: service?._queueState?.current?.name ?? null,
+		});
+		if (this.boot.length > 60) this.boot.shift();
+	}
+
+	get bootLog(): Array<Record<string, unknown>> {
+		return this.boot;
+	}
+
+	private scheduleSettledAssert(delayMs = 600): void {
+		if (this.settleTimer !== null) window.clearTimeout(this.settleTimer);
+
+		const now = Date.now();
+		if (now - this.reassertWindow > 2000) {
+			this.reassertWindow = now;
+			this.reassertsInWindow = 0;
+		}
+		if (this.reassertsInWindow >= 12) return;
+		this.reassertsInWindow += 1;
+
+		this.settleTimer = window.setTimeout(() => {
+			this.settleTimer = null;
+			this.assertQueue(true);
+		}, delayMs);
+	}
+
 	assertQueue(force: boolean): void {
+		this.snapshot(force ? "assert" : "assert-throttled");
 		if (!this.ownsQueue) return;
 		const now = Date.now();
 		if (!force && now - this.lastQueueAssert < 250) return;
@@ -255,8 +308,9 @@ export class PlayInterceptor {
 				if (!this.ownsQueue) return;
 				const payload = event?.data ?? event;
 				if (payload === this.lastEmittedQueue) return;
-				this.assertQueue(false);
+				this.scheduleSettledAssert();
 			});
+
 			this.unsubscribeQueue = typeof unsubscribe === "function" ? unsubscribe : null;
 		} catch (error) {
 			log.warn("could not watch queue updates", error);
@@ -381,6 +435,54 @@ export class PlayInterceptor {
 		}, remaining);
 	}
 
+	private adoptFromState(state: any): void {
+		if (this.arbiter.isClaimed) return;
+
+		const contextUri = state?.context?.uri;
+		if (typeof contextUri !== "string") return;
+
+		if (!this.isSupportedContext(contextUri)) {
+			if (this.contextUri) {
+				this.contextUri = undefined;
+				this.queue.clear();
+			}
+			return;
+		}
+
+		if (contextUri === this.contextUri || this.adopting === contextUri) return;
+
+		this.adopting = contextUri;
+		void this.adoptContext(contextUri, { uid: state?.item?.uid, uri: state?.item?.uri })
+			.then(() => {
+				log.info("adopted active context", contextUri, `(${this.queue.size} items)`);
+				this.assertQueue(true);
+			})
+			.finally(() => {
+				this.adopting = null;
+			});
+	}
+
+	syncFromCurrentState(timeoutMs = 20000): void {
+		const started = Date.now();
+
+		const tick = (): void => {
+			try {
+				const state = this.api?._state;
+				if (this.arbiter.isClaimed) return;
+				if (state?.context?.uri) {
+					this.adoptFromState(state);
+					if (this.contextUri) return;
+				}
+			} catch (error) {
+				log.debug("could not read initial state", error);
+			}
+
+			if (Date.now() - started < timeoutMs) window.setTimeout(tick, 500);
+		};
+
+		tick();
+	}
+
 	private onSpotifyState(state: any): void {
 		const uri: string | undefined = state?.item?.uri;
 		if (!uri) return;
@@ -390,6 +492,8 @@ export class PlayInterceptor {
 			this.clearHandoff();
 			return;
 		}
+
+		this.adoptFromState(state);
 
 		if (isJvUri(uri)) {
 			this.lastSpotifyUri = uri;
@@ -428,43 +532,99 @@ export class PlayInterceptor {
 	}
 
 	private async startFromClick(target: InterceptTarget): Promise<void> {
-		this.contextUri = target.contextUri;
-		if (target.contextUri) await this.loadQueue(target.contextUri, target.uid, target.uri);
-		else this.queue.clear();
-
 		this.arbiter.setPlaybackContext({
 			uid: target.uid,
 			contextUri: target.contextUri,
 			index: target.index,
 		});
 
-		await this.playJuiceVault(target.uri);
-		this.syncQueueStore();
+		const playing = this.playJuiceVault(target.uri);
+
+		if (target.contextUri && this.isSupportedContext(target.contextUri)) {
+			this.contextUri = target.contextUri;
+			void this.loadQueue(target.contextUri, target.uid, target.uri).then(() => this.syncQueueStore());
+		} else {
+			this.contextUri = undefined;
+			this.queue.clear();
+		}
+
+		await playing;
+	}
+
+	private isSupportedContext(uri: string | undefined): boolean {
+		if (!uri) return false;
+		return uri.startsWith("spotify:playlist:") || uri === "spotify:collection:tracks";
 	}
 
 	async adoptContext(contextUri: string | undefined, skipTo: any): Promise<void> {
-		if (!contextUri || !contextUri.startsWith("spotify:playlist:")) {
+		if (!this.isSupportedContext(contextUri)) {
+			if (this.contextUri) log.debug("unsupported context, standing down:", contextUri);
 			this.contextUri = undefined;
 			this.queue.clear();
 			return;
 		}
 		this.contextUri = contextUri;
-		await this.loadQueue(contextUri, skipTo?.uid, skipTo?.uri);
+		await this.loadQueue(contextUri!, skipTo?.uid, skipTo?.uri);
+	}
+
+	private async fetchContextItems(contextUri: string): Promise<any[]> {
+		if (contextUri === "spotify:collection:tracks") {
+			const library = Spicetify.Platform.LibraryAPI;
+			const result = await library.getTracks({ limit: 1000, offset: 0 });
+			return result?.items ?? [];
+		}
+
+		const view = getViewOptions(contextUri);
+		const options: Record<string, unknown> = { offset: 0, limit: 1000 };
+		if (view?.sort?.field) options.sort = view.sort;
+		if (view?.filter) options.filter = view.filter;
+		if (view?.filterPredicates?.length) options.filterPredicates = view.filterPredicates;
+		if (view?.descriptorFilter?.length) options.descriptorFilter = view.descriptorFilter;
+
+		const api = Spicetify.Platform.PlaylistAPI;
+		let items: any[] = [];
+
+		try {
+			const contents = await api.getContents(contextUri, options);
+			items = contents?.items ?? [];
+		} catch (error) {
+			log.debug("sorted getContents failed, falling back", error);
+		}
+
+		if (!items.length) {
+			const contents = await api.getContents(contextUri);
+			items = contents?.items ?? [];
+		}
+
+		return items;
 	}
 
 	private async loadQueue(contextUri: string, targetUid?: string, targetUri?: string): Promise<void> {
 		try {
-			const contents = await Spicetify.Platform.PlaylistAPI.getContents(contextUri);
-			const items: any[] = contents?.items ?? [];
+			const items = await this.fetchContextItems(contextUri);
 			let index = targetUid ? items.findIndex((item) => item.uid === targetUid) : -1;
 			if (index < 0 && targetUri) index = items.findIndex((item) => item.uri === targetUri);
+			if (!items.length) {
+				log.warn("context returned no items, standing down:", contextUri);
+				this.queue.clear();
+				this.contextUri = undefined;
+				return;
+			}
+
 			this.queue.load(items, Math.max(0, index), contextUri);
-			log.debug(`queue loaded: ${items.length} items, starting at ${index}`);
+			this.arbiter.setPlaybackContext({ ...(this.arbiter.playbackContext ?? {}), contextUri });
+			log.debug(`queue loaded: ${items.length} items from ${contextUri}, start ${index}`);
 			this.syncQueueStore();
+			this.scheduleSettledAssert(900);
 		} catch (error) {
 			log.warn("could not load queue from context", error);
 			this.queue.clear();
+			this.contextUri = undefined;
 		}
+	}
+
+	reloadQueue(): void {
+		if (this.contextUri) void this.loadQueue(this.contextUri, undefined, this.lastSpotifyUri ?? undefined);
 	}
 
 	async playQueueItem(item: any): Promise<void> {
@@ -536,6 +696,8 @@ export class PlayInterceptor {
 	}
 
 	dispose(): void {
+		if (this.settleTimer !== null) window.clearTimeout(this.settleTimer);
+		this.settleTimer = null;
 		this.clearHandoff();
 		this.unsubscribeQueue?.();
 		this.unsubscribeQueue = null;

@@ -63,16 +63,20 @@ export function traceForJv(seconds = 25): Promise<Record<string, unknown>> {
 			if (typeof fn !== "function") continue;
 
 			const own = Object.getOwnPropertyDescriptor(api, key);
-			const bound = fn.bind(api);
 			const label = `${apiName}.${key}`;
 
 			try {
-				Object.defineProperty(api, key, {
-					value: (...args: any[]) => {
-						const result = bound(...args);
+				const proxy = new Proxy(fn, {
+					apply: (_target: any, thisArg: any, args: any[]) => {
+						const result = Reflect.apply(fn, thisArg ?? api, args);
 						record(label, result);
 						return result;
 					},
+					construct: (_target: any, args: any[], newTarget: any) => Reflect.construct(fn, args, newTarget),
+				});
+
+				Object.defineProperty(api, key, {
+					value: proxy,
 					writable: true,
 					configurable: true,
 					enumerable: own?.enumerable ?? false,
