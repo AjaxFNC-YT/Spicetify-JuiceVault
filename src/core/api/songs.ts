@@ -1,4 +1,5 @@
 import { get } from "../http/client";
+import { ApiError } from "../http/errors";
 import { assetUrl } from "../config";
 import { cleanTitle, toSong, toSongs, type Song, type SongCategory } from "../models/song";
 
@@ -36,6 +37,35 @@ export async function getMetadata(songId: string): Promise<SongMetadata> {
 	metadataCache.set(songId, meta);
 	fetched.add(songId);
 	return meta;
+}
+
+export interface TrackerInfo {
+	era: string | null;
+	trackNumber: number | null;
+	title: string | null;
+	altNames: string[];
+	artists: string | null;
+	producers: string | null;
+	engineers: string | null;
+	additionalInfo: string | null;
+	fileNames: string | null;
+	instrumentalNames: string | null;
+	recordingLocation: string | null;
+	recordDate: string | null;
+	previewDate: string | null;
+	dates: string | null;
+	duration: string | null;
+	category: string | null;
+	availableFiles: string | null;
+}
+
+export async function getTrackerInfo(songId: string): Promise<TrackerInfo | null> {
+	try {
+		return await get<TrackerInfo>(`/music/tracker/info/${encodeURIComponent(songId)}`, { retries: 1 });
+	} catch (error) {
+		if (error instanceof ApiError && error.status === 404) return null;
+		throw error;
+	}
 }
 
 export function forgetMetadata(): void {

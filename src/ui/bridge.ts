@@ -52,6 +52,7 @@ export interface JuiceVaultApi {
 	playlists(): Promise<Array<{ uri: string; name: string }>>;
 	addToPlaylist(playlistUri: string, songId: string): Promise<string>;
 	saveToLiked(songId: string): Promise<void>;
+	showSongInfo(songId: string): void;
 	updates: { status(): UpdateStatus; check(): Promise<UpdateStatus>; whatsNew(): Promise<void>; on(handler: (status: UpdateStatus) => void): () => void };
 	albums: { get(songId: string): string | null; request(songIds: string[]): Promise<void>; on(handler: (songIds: string[]) => void): () => void };
 	curation: { targets(songId: string): Promise<CurationTarget[]>; apply(songId: string, add: string[], remove: string[]): Promise<void> };

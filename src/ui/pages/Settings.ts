@@ -317,6 +317,12 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 				"Adds the same labels to JuiceVault songs in Liked Songs, playlists, search and the queue.",
 			),
 			Row(
+				"Show alternate song names as a tag",
+				Toggle(device.showAltNames, (value) => updateDevice({ showAltNames: value })),
+				undefined,
+				"Known alternate names show next to the song's tag, on JuiceVault pages, in Spotify lists and in the player.",
+			),
+			Row(
 				"Colored tags",
 				Toggle(device.coloredTags, (value) => updateDevice({ coloredTags: value })),
 				undefined,

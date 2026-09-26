@@ -25,6 +25,9 @@ import { registerNativeTags } from "./integration/NativeTags";
 import { applyCuration, curationTargets } from "./integration/curation";
 import { knownAlbum, onAlbums, requestAlbums } from "./core/catalog/albums";
 import { onDeviceSettings } from "./core/settings/device";
+import { SongInfo } from "./ui/modals/SongInfo";
+import { openModal } from "./ui/modal";
+import { h } from "./ui/h";
 import { SearchInjector } from "./integration/SearchInjector";
 import { Announcements } from "./integration/Announcements";
 import { Updates, type UpdateStatus } from "./integration/Updates";
@@ -377,6 +380,7 @@ async function main(): Promise<void> {
 			await Spicetify.Platform.PlaylistAPI.add(playlistUri, [uri], { before: "end" });
 			return uri;
 		},
+		showSongInfo: (songId: string) => openModal("Song info", h(SongInfo, { songId, song: catalog.get(songId) ?? null }), true),
 		updates: {
 			status: () => updates.status,
 			check: () => updates.check(true),
@@ -451,7 +455,7 @@ async function main(): Promise<void> {
 	guard("updates", () => updates.start(), undefined);
 	guard("announcements", () => announcements.start(), undefined);
 	unregisterSyncMenu = guard("playlist menu", () => registerSyncMenu(playlistSync, session), () => {});
-	unregisterTrackMenu = guard("track menu", () => registerTrackMenu(catalog), () => {});
+	unregisterTrackMenu = guard("track menu", () => registerTrackMenu(catalog, api.showSongInfo), () => {});
 	unregisterNativeTags = guard("native tags", () => registerNativeTags(catalog), () => {});
 	if (session.isSignedIn) guard("playlist sync", () => playlistSync.start(), undefined);
 

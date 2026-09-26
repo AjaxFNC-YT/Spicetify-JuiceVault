@@ -3,6 +3,7 @@ import { siteUrl } from "../core/config";
 import { getDeviceSettings } from "../core/settings/device";
 import { whenMenuReady } from "./SyncMenu";
 import { isJvUri, parseSongId } from "./uri";
+import { iconMarkup } from "../ui/icons";
 
 declare const Spicetify: any;
 
@@ -86,7 +87,7 @@ function rewriteCopiedLinks(): () => void {
 	};
 }
 
-export function registerTrackMenu(catalog: Catalog): () => void {
+export function registerTrackMenu(catalog: Catalog, showInfo: (songId: string) => void): () => void {
 	const stopWatching = watchMenus();
 	const stopRewriting = rewriteCopiedLinks();
 
@@ -106,8 +107,21 @@ export function registerTrackMenu(catalog: Catalog): () => void {
 			},
 			"copy",
 		);
+		const info = new Spicetify.ContextMenu.Item(
+			"Song info",
+			(uris: string[]) => {
+				const songId = parseSongId(uris[0]!);
+				if (songId) showInfo(songId);
+			},
+			(uris: string[]) => uris.length === 1 && isJvUri(uris[0]),
+			`<svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor">${iconMarkup("info")}</svg>`,
+		);
+		info.register();
 		copy.register();
-		return () => copy.deregister();
+		return () => {
+			info.deregister();
+			copy.deregister();
+		};
 	});
 
 	return () => {

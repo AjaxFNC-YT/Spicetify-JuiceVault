@@ -24,6 +24,18 @@ export function songKind(song: { category: SongCategory; isSessionEdit: boolean 
 	return song.category === "main" && song.isSessionEdit ? "session" : song.category;
 }
 
+export function alternateNames(song: { title: string; altNames: string[] }, shown = song.title): string[] {
+	const seen = new Set([shown.trim().toLowerCase()]);
+	const names: string[] = [];
+	for (const name of [song.title, ...song.altNames]) {
+		const key = name.trim().toLowerCase();
+		if (!key || seen.has(key)) continue;
+		seen.add(key);
+		names.push(name.trim());
+	}
+	return names;
+}
+
 export function songTag(song: { category: SongCategory; isSessionEdit: boolean }): string | null {
 	return TAGS[songKind(song)] ?? null;
 }

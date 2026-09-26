@@ -142,6 +142,7 @@ export function buildState(input: ProjectionInput): PlayerState {
 	state.isBuffering = false;
 	state.hasContext = true;
 	state.restrictions = permit(input.baseline?.restrictions);
+	state.signals = [];
 	state.mediaPlaybackMode = 0;
 	state.format = null;
 	state.nextItems = input.nextItems ?? [];

@@ -1,4 +1,4 @@
-import { songKind, songTag, type Song } from "../../core/models/song";
+import { alternateNames, songKind, songTag, type Song } from "../../core/models/song";
 import { albumName, getDeviceSettings } from "../../core/settings/device";
 import { api } from "../bridge";
 import { h, native, notify, useEffect, useState } from "../h";
@@ -61,8 +61,14 @@ function menuSpec(song: Song, playlists: Array<{ uri: string; name: string }>, o
 			key: "like",
 			label: "Save to your Liked Songs",
 			icon: "heart",
-			dividerAfter: copyName,
+			dividerAfter: true,
 			onClick: () => void run(() => api()!.saveToLiked(song.id), "Spotify wouldn't add this to Liked Songs"),
+		},
+		{
+			key: "info",
+			label: "Song info",
+			icon: "info",
+			onClick: () => api()?.showSongInfo(song.id),
 		},
 		...(copyName
 			? [
@@ -135,6 +141,7 @@ function Row({ song, position, playing, onPlay, playlists, detail, standaloneMen
 	const known = api()?.catalog.get(song.id) ?? song;
 	const display = getDeviceSettings();
 	const tag = display.showTags ? songTag(known) : null;
+	const others = display.showAltNames ? alternateNames(known, song.title) : [];
 	const kind = songKind(known);
 	const items = menuSpec(song, playlists, standaloneMenu ? () => setPanelAt(menuAt) : undefined);
 	const menu = !standaloneMenu && RC.TrackMenu ? h(RC.TrackMenu, { uri: uriForSong(song) }) : nativeMenu(items);
@@ -182,7 +189,9 @@ function Row({ song, position, playing, onPlay, playlists, detail, standaloneMen
 			h(
 				"div",
 				{ className: "jv-meta" },
-				h("p", { className: "jv-name" }, song.title, tag ? h("span", { className: "jv-tag", "data-kind": kind, "data-colored": String(display.coloredTags) }, tag) : null),
+				h("p", { className: "jv-name" }, song.title, tag ? h("span", { className: "jv-tag", "data-kind": kind, "data-colored": String(display.coloredTags) }, tag) : null,
+					...others.slice(0, 1).map((name) => h("span", { key: name, className: "jv-tag jv-tag--alt", title: others.join(", ") }, name)),
+					others.length > 1 ? h("span", { className: "jv-tag jv-tag--alt", title: others.join(", ") }, `+${others.length - 1}`) : null),
 				h("p", { className: "jv-artist" }, song.artist),
 			),
 		),

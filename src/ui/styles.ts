@@ -64,6 +64,30 @@ const CSS = `
 .jv-tag[data-colored="true"][data-kind="stem"], .jv-native-tag[data-colored="true"][data-kind="stem"] { background: rgba(245,158,11,.22); color: #fcd34d; }
 .jv-tag[data-colored="true"][data-kind="released"], .jv-native-tag[data-colored="true"][data-kind="released"] { background: rgba(30,215,96,.2); color: #6ee7a0; }
 .jv-tag[data-colored="true"][data-kind="cut"], .jv-native-tag[data-colored="true"][data-kind="cut"] { background: rgba(239,68,68,.22); color: #fca5a5; }
+.jv-native-tags { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; margin-right: 6px; vertical-align: middle; white-space: nowrap; }
+.jv-native-tags[data-slot="title"] { margin: 0 0 0 8px; }
+.jv-native-tags .jv-native-tag { flex: 0 0 auto; margin-right: 0; }
+.main-trackList-rowMainContent > :has(> .jv-native-tags), .main-trackInfo-artists:has(> .jv-native-tags) {
+  display: flex; align-items: center; min-width: 0; max-width: 100%; overflow: hidden; white-space: nowrap; }
+.main-trackList-rowMainContent > :has(> .jv-native-tags) > :not(.jv-native-tags),
+.main-trackInfo-artists:has(> .jv-native-tags) > :not(.jv-native-tags) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.jv-native-tags .jv-native-tag--alt { max-width: 150px; overflow: hidden; text-overflow: ellipsis;
+  display: inline-block; text-transform: none; letter-spacing: 0; font-weight: 600; font-size: .68rem;
+  background: rgba(255,255,255,.07); color: rgba(255,255,255,.6); }
+.main-trackInfo-name:has(> .jv-native-tags[data-slot="title"]) { display: flex; align-items: center; min-width: 0; }
+.main-trackInfo-name:has(> .jv-native-tags[data-slot="title"]) > :not(.jv-native-tags) { min-width: 0; overflow: hidden; }
+.jv-tag--alt { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;
+  text-transform: none; letter-spacing: 0; font-weight: 600; font-size: .68rem; background: rgba(255,255,255,.07); color: rgba(255,255,255,.6); }
+.jv-info { min-width: min(520px, 80vw); }
+.jv-info-head { display: flex; align-items: center; gap: 16px; }
+.jv-info-cover { width: 72px; height: 72px; flex: 0 0 auto; border-radius: 4px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+.jv-info-title { min-width: 0; }
+.jv-info-name { margin: 0; font-size: 1.15rem; font-weight: 700; color: #fff; }
+.jv-info-sub { margin: 4px 0 0; font-size: .85rem; color: rgba(255,255,255,.65); }
+.jv-info-grid { display: grid; grid-template-columns: max-content 1fr; gap: 10px 20px; max-height: 50vh; overflow-y: auto; margin: 4px 0 0;
+  padding: 14px 16px; border-radius: 6px; background: rgba(255,255,255,.05); }
+.jv-info-grid dt { font-size: .8rem; font-weight: 700; color: rgba(255,255,255,.6); }
+.jv-info-grid dd { margin: 0; font-size: .85rem; line-height: 1.45; color: #fff; white-space: pre-line; overflow-wrap: anywhere; }
 .jv-more { display: block; margin: 28px auto 0; height: 40px; padding: 0 28px; border-radius: 500px; border: 1px solid rgba(255,255,255,.22);
   background: transparent; color: #fff; font-weight: 700; font-size: .8rem; cursor: pointer; }
 .jv-more:hover { border-color: #fff; transform: scale(1.02); }

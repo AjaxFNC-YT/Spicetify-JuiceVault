@@ -23,6 +23,7 @@ export interface DeviceSettings {
 	tidyMenus: boolean;
 	jvCopyLink: boolean;
 	copySongName: boolean;
+	showAltNames: boolean;
 }
 
 const DEFAULTS: DeviceSettings = {
@@ -42,6 +43,7 @@ const DEFAULTS: DeviceSettings = {
 	tidyMenus: true,
 	jvCopyLink: true,
 	copySongName: true,
+	showAltNames: true,
 };
 
 const changes = new Emitter<{ changed: { settings: DeviceSettings; patch: Partial<DeviceSettings> } }>();
