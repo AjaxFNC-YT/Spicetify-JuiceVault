@@ -2,7 +2,9 @@ import { createLogger } from "../log";
 import { listAll, rememberMetadata, searchRemote } from "../api/songs";
 import type { Song, SongCategory } from "../models/song";
 import { loadSongs, saveSongs, clearCache } from "./store";
-import { SearchIndex, type SearchResult } from "./search";
+import { SearchIndex, displaySong, type SearchResult } from "./search";
+import { getDeviceSettings } from "../settings/device";
+import { Emitter } from "../emitter";
 
 const log = createLogger("catalog");
 
@@ -10,6 +12,7 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const CATEGORIES: SongCategory[] = ["main", "instrumental", "remaster", "stem", "released", "cut"];
 
 export class Catalog {
+	readonly events = new Emitter<{ updated: number }>();
 	private songs: Song[] = [];
 	private byId = new Map<string, Song>();
 	private index = new SearchIndex();
@@ -80,10 +83,15 @@ export class Catalog {
 		this.loadedAt = Date.now();
 		this.source = source;
 		for (const song of songs) rememberMetadata(song);
+		this.events.emit("updated", songs.length);
 	}
 
 	search(query: string, limit = 50): SearchResult[] {
-		return this.index.search(query, limit);
+		return this.index.search(query, limit, getDeviceSettings().fuzzySearch);
+	}
+
+	searchSongs(query: string, limit = 50): Song[] {
+		return this.search(query, limit).map(displaySong);
 	}
 
 	async searchOnline(query: string): Promise<Song[]> {
@@ -91,7 +99,7 @@ export class Catalog {
 			return await searchRemote(query);
 		} catch (error) {
 			log.debug("remote search failed, falling back to local", error);
-			return this.search(query).map((result) => result.song);
+			return this.searchSongs(query);
 		}
 	}
 

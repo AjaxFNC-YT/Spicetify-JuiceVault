@@ -48,6 +48,17 @@ export async function changePassword(session: Session, currentPassword: string, 
 	});
 }
 
+export interface ListeningActivity {
+	currentStreak: number;
+	longestStreak: number;
+	activeDays: number;
+}
+
+export async function listeningActivity(session: Session): Promise<ListeningActivity | null> {
+	const result = await session.authed<Envelope<ListeningActivity>>("/user/history/activity?days=730");
+	return result?.data ?? null;
+}
+
 export async function listeningStats(session: Session): Promise<ListeningStats | null> {
 	const result = await session.authed<Envelope<ListeningStats>>("/user/history/stats");
 	return result?.data ?? null;

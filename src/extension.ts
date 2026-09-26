@@ -1,11 +1,11 @@
-import { config, coverUrl } from "./core/config";
+import { assetUrl, config, coverUrl } from "./core/config";
 import { createLogger } from "./core/log";
 import { ShadowPlayer, type ShadowTrack } from "./playback/ShadowPlayer";
 import { Arbiter } from "./playback/Arbiter";
 import { Queue } from "./playback/Queue";
 import { saveSession, loadSession, clearSession, type SavedSession } from "./playback/Session";
 import { Equalizer } from "./playback/Equalizer";
-import { readEqualizer, describeEqualizer, watchEqualizer } from "./integration/SpotifyEq";
+import { initialFrequencies, describeEqualizer, watchEqualizer } from "./integration/SpotifyEq";
 import { traceForJv } from "./integration/trace";
 import { buildTrackUri, isJvUri, parseSongId } from "./integration/uri";
 import { PlayInterceptor } from "./integration/PlayInterceptor";
@@ -13,12 +13,13 @@ import { Playability } from "./integration/Playability";
 import { getMetadata } from "./core/api/songs";
 import { Catalog } from "./core/catalog/catalog";
 import { Session } from "./core/auth/session";
-import { updateProfile, changePassword, listeningStats, type ProfilePatch } from "./core/api/account";
+import { updateProfile, changePassword, listeningStats, listeningActivity, type ProfilePatch } from "./core/api/account";
 import { getDeviceSettings, setDeviceSettings } from "./core/settings/device";
 import { logListen } from "./core/api/history";
 import { Scrobbler } from "./playback/Scrobbler";
 import { PlaylistSync } from "./integration/PlaylistSync";
 import { registerSyncMenu } from "./integration/SyncMenu";
+import { SearchInjector } from "./integration/SearchInjector";
 
 const log = createLogger("boot");
 
@@ -52,7 +53,17 @@ function toTrack(meta: Awaited<ReturnType<typeof getMetadata>>): ShadowTrack {
 		artist: meta.artist,
 		durationSeconds: meta.duration,
 		album: meta.album ?? null,
+		cover: assetUrl(meta.cover ?? null),
 	};
+}
+
+function guard<T>(label: string, task: () => T, fallback: T): T {
+	try {
+		return task();
+	} catch (error) {
+		log.error(`${label} failed; continuing without it`, error);
+		return fallback;
+	}
 }
 
 async function main(): Promise<void> {
@@ -82,10 +93,10 @@ async function main(): Promise<void> {
 	const playlistSync = new PlaylistSync(session);
 	session.events.on("signedIn", () => {
 		scrobbler.enable();
-		playlistSync.start();
+		guard("playlist sync", () => playlistSync.start(), undefined);
 	});
-	if (session.isSignedIn) playlistSync.start();
-	const unregisterSyncMenu = registerSyncMenu(playlistSync, session);
+	const searchInjector = new SearchInjector();
+	let unregisterSyncMenu: () => void = () => {};
 	const player = new ShadowPlayer();
 	const scrobbler = new Scrobbler(
 		player,
@@ -108,13 +119,22 @@ async function main(): Promise<void> {
 	const playability = earlyPlayability;
 	playability.install();
 	playability.refreshViews();
-	const eqSnapshot = readEqualizer();
-	const equalizer = new Equalizer(player.element, eqSnapshot?.frequencies);
+	const equalizer = new Equalizer(player.element, initialFrequencies());
 
 	const streamAllowsWebAudio = async (): Promise<boolean> => {
 		try {
-			const response = await fetch(`${config.api.baseUrl.replace(/\/+$/, "")}/health`);
-			return Boolean(response.headers.get("access-control-allow-origin"));
+			const image = new Image();
+			image.crossOrigin = "anonymous";
+			image.src = `${coverUrl(config.dev.sampleSongId)}?cors-check=${Date.now()}`;
+			await image.decode();
+			const canvas = document.createElement("canvas");
+			canvas.width = 1;
+			canvas.height = 1;
+			const context = canvas.getContext("2d");
+			if (!context) return false;
+			context.drawImage(image, 0, 0, 1, 1);
+			context.getImageData(0, 0, 1, 1);
+			return true;
 		} catch {
 			return false;
 		}
@@ -124,8 +144,7 @@ async function main(): Promise<void> {
 
 	if (!webAudioSafe) {
 		log.warn(
-			"equalizer disabled: api.juicevault.xyz does not send Access-Control-Allow-Origin. " +
-				"Web Audio would silence the stream. Add the header to enable EQ.",
+			"equalizer disabled: JuiceVault media is not readable cross-origin here, so Web Audio would silence it.",
 		);
 	}
 
@@ -134,13 +153,12 @@ async function main(): Promise<void> {
 	}
 
 	if (webAudioSafe && equalizer.attach()) {
-		const applyEq = (): void => {
-			const snapshot = readEqualizer();
-			if (!snapshot) return;
-			equalizer.setGains(snapshot.enabled ? snapshot.gains : snapshot.gains.map(() => 0));
-		};
-		applyEq();
-		const stopEqWatch = watchEqualizer(() => applyEq());
+		const stopEqWatch = watchEqualizer((snapshot) => {
+			const device = getDeviceSettings();
+			equalizer.setBoostDb(device.volumeTrimDb);
+			const active = snapshot.enabled && device.useSpotifyEq;
+			equalizer.setGains(active ? snapshot.gains : snapshot.gains.map(() => 0));
+		});
 		player.events.on("play", () => void equalizer.resume());
 		disposers.push(stopEqWatch);
 	}
@@ -233,6 +251,13 @@ async function main(): Promise<void> {
 		log.info("ended", track.title);
 	});
 
+	const trackUriFor = async (songId: string): Promise<string> => {
+		const meta = await getMetadata(songId);
+		const uri = buildTrackUri({ songId: meta.id, artist: meta.artist, title: meta.title, durationSeconds: meta.duration });
+		playability.seed([uri]);
+		return uri;
+	};
+
 	const api = {
 		player,
 		arbiter,
@@ -287,26 +312,30 @@ async function main(): Promise<void> {
 			update: (patch: ProfilePatch) => updateProfile(session, patch),
 			changePassword: (current: string, next: string) => changePassword(session, current, next),
 			stats: () => listeningStats(session),
+			activity: () => listeningActivity(session),
 		},
 		device: {
 			get: getDeviceSettings,
 			set: setDeviceSettings,
 		},
-		search: (query: string, limit?: number) => catalog.search(query, limit).map((result) => result.song),
+		search: (query: string, limit?: number) => catalog.searchSongs(query, limit),
 		reloadCatalog: () => catalog.load(true),
 		queue,
 		async addToPlaylist(playlistUri: string, songId: string = config.dev.sampleSongId): Promise<string> {
-			const meta = await getMetadata(songId);
-			const uri = buildTrackUri({
-				songId: meta.id,
-				artist: meta.artist,
-				title: meta.title,
-				durationSeconds: meta.duration,
-			});
-			playability.seed([uri]);
+			const uri = await trackUriFor(songId);
 			await Spicetify.Platform.PlaylistAPI.add(playlistUri, [uri], { before: "end" });
-			log.info("added", meta.title, "to", playlistUri);
 			return uri;
+		},
+		async saveToLiked(songId: string): Promise<void> {
+			const uri = await trackUriFor(songId);
+			await Spicetify.Platform.LibraryAPI.add({ uris: [uri] });
+		},
+		async newPlaylistWith(songId: string): Promise<string> {
+			const meta = await getMetadata(songId);
+			const playlistUri: string | null = await Spicetify.Platform.RootlistAPI.createPlaylist(meta.title, { after: "start" });
+			if (!playlistUri) throw new Error("Spotify did not create the playlist");
+			await Spicetify.Platform.PlaylistAPI.add(playlistUri, [await trackUriFor(songId)], { before: "end" });
+			return playlistUri;
 		},
 		dumpQueue: () => interceptor.inspectQueue(),
 		dumpQueueStore: () => interceptor.inspectQueueStore(),
@@ -334,6 +363,7 @@ async function main(): Promise<void> {
 			scrobbler.dispose();
 			playlistSync.dispose();
 			unregisterSyncMenu();
+			searchInjector.dispose();
 			for (const stop of disposers) stop();
 			equalizer.dispose();
 			interceptor.dispose();
@@ -346,6 +376,10 @@ async function main(): Promise<void> {
 	};
 
 	window.JuiceVault = api;
+
+	guard("search", () => searchInjector.start(), undefined);
+	unregisterSyncMenu = guard("playlist menu", () => registerSyncMenu(playlistSync, session), () => {});
+	if (session.isSignedIn) guard("playlist sync", () => playlistSync.start(), undefined);
 
 	const saved = loadSession();
 	if (saved && getDeviceSettings().resumeOnLaunch) await restore(saved);

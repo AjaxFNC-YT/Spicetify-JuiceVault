@@ -1,4 +1,4 @@
-import { coverUrl } from "../config";
+import { assetUrl, coverUrl } from "../config";
 
 export type SongCategory = "main" | "instrumental" | "remaster" | "stem" | "released" | "cut";
 
@@ -52,7 +52,7 @@ export function toSong(raw: any, fallbackCategory: SongCategory = "main"): Song 
 		year: Number.isFinite(raw.year) ? Number(raw.year) : null,
 		durationSeconds,
 		length: typeof raw.length === "string" ? raw.length : formatLength(durationSeconds),
-		coverUrl: coverUrl(raw.id),
+		coverUrl: (typeof raw.cover === "string" && raw.cover ? assetUrl(raw.cover) : null) ?? coverUrl(raw.id),
 		playCount: Number.isFinite(raw.play_count) ? Number(raw.play_count) : 0,
 		fileName: typeof raw.file_name === "string" ? raw.file_name : null,
 		fileSizeBytes: Number.isFinite(raw.file_size_bytes) ? Number(raw.file_size_bytes) : null,

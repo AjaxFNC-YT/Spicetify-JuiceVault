@@ -32,7 +32,7 @@ export function buildItem(track: ShadowTrack, baselineItem: PlayerState | null, 
 	});
 
 	const artist = { type: "artist", uri, name: track.artist || "Juice WRLD" };
-	const cover = coverUrl(track.songId);
+	const cover = track.cover || coverUrl(track.songId);
 
 	return {
 		...(baselineItem ?? {}),

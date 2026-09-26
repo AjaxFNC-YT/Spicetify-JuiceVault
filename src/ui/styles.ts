@@ -74,7 +74,8 @@ const CSS = `
 
 .jv-dots { background: none; border: none; cursor: pointer; color: rgba(255,255,255,.7);
   padding: 4px; display: flex; align-items: center; opacity: 0; transition: opacity .12s ease; }
-.jv-row:hover .jv-dots { opacity: 1; }
+.jv-row:hover .jv-dots, .jv-row[data-menu="true"] .jv-dots { opacity: 1; }
+.jv-row[data-menu="true"] { background: rgba(255,255,255,.1); }
 .jv-dots:hover { color: #fff; }
 .jv-end { display: flex; align-items: center; gap: 12px; justify-content: flex-end; }
 
@@ -217,6 +218,51 @@ const CSS = `
 .jv-modal-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 4px; }
 .jv-radio { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 2px solid #727272; box-sizing: border-box; }
 .jv-radio[data-on="true"] { border: 5px solid var(--spice-button-active, #1ed760); }
+
+.jv-search-host { position: relative; z-index: 2; padding: 16px 32px 8px; color: #fff; }
+.jv-search-takeover > :not(.jv-search-host) { display: none !important; }
+.jv-search-panel { display: flex; flex-direction: column; gap: 16px; }
+.jv-search-results { padding-bottom: 120px; }
+
+.jv-switch { display: inline-flex; align-self: flex-start; gap: 4px; padding: 4px; border-radius: 500px;
+  background: #121212; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.jv-switch-option { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 20px 0 12px;
+  border: none; border-radius: 500px; background: transparent; color: rgba(255,255,255,.62);
+  font-family: inherit; font-size: .9rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+  transition: background .18s ease, color .18s ease; }
+.jv-switch-option:hover { color: #fff; }
+.jv-switch-option[data-active="true"] { background: #2e2e2e; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+.jv-switch-icon { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 6px; object-fit: cover;
+  display: inline-flex; align-items: center; justify-content: center; }
+.jv-switch-icon--spotify { background: #fff; color: #000; border-radius: 6px; }
+.jv-switch-option:not([data-active="true"]) .jv-switch-icon { opacity: .7; filter: grayscale(.4); }
+
+.jv-masked { -webkit-text-security: disc; font-family: inherit; letter-spacing: .08em; }
+
+.jv-standalone-menu { isolation: isolate; box-sizing: border-box; display: flex; flex-direction: column; padding: 4px;
+  border-radius: 4px; background: #282828; color: #fff; font-size: .875rem; font-weight: 400;
+  box-shadow: 0 16px 24px rgba(0,0,0,.3), 0 6px 8px rgba(0,0,0,.2); }
+.jv-mi-list { margin: 0; padding: 0; list-style: none; overflow-y: auto; }
+.jv-mi--divider { padding-bottom: 4px; margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,.1); }
+.jv-mi-button { display: flex; align-items: center; gap: 12px; width: 100%; height: 40px; padding: 0 8px 0 12px;
+  border: none; border-radius: 2px; background: none; color: rgba(255,255,255,.9); font: inherit; font-weight: 400;
+  text-align: left; cursor: default; }
+.jv-mi-button:hover:not(:disabled), .jv-mi-button[data-open="true"] { background: rgba(255,255,255,.1); color: #fff; }
+.jv-mi-button:disabled { opacity: .5; }
+.jv-mi-icon { display: flex; flex: 0 0 auto; color: rgba(255,255,255,.7); }
+.jv-mi-caret { display: flex; margin-left: auto; color: rgba(255,255,255,.7); }
+.jv-menu-label { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-mi-search { position: relative; display: flex; align-items: center; margin: 4px 4px 8px; }
+.jv-mi-search svg { position: absolute; left: 10px; color: rgba(255,255,255,.7); pointer-events: none; }
+.jv-mi-search input { width: 100%; height: 36px; padding: 0 12px 0 36px; border: none; border-radius: 4px;
+  background: #3e3e3e; color: #fff; font: inherit; font-size: .875rem; outline: none; }
+.jv-mi-search input::placeholder { color: rgba(255,255,255,.6); }
+.jv-mi-empty { padding: 10px 12px; color: rgba(255,255,255,.6); }
+
+.jv-range { display: flex; align-items: center; gap: 12px; width: 320px; max-width: 100%; }
+.jv-range input { flex: 1 1 auto; height: 4px; accent-color: #fff; cursor: pointer; }
+.jv-range-reset { flex: 0 0 auto; font-size: .75rem; }
+.jv-range-value { flex: 0 0 auto; min-width: 64px; white-space: nowrap; text-align: right; font-size: .875rem; font-variant-numeric: tabular-nums; color: #fff; }
 `;
 
 export function injectStyle(): void {

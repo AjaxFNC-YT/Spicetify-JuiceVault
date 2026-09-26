@@ -1,16 +1,18 @@
 import type { Song } from "../core/models/song";
 import type { Profile } from "../core/auth/session";
-import type { ListeningStats, ProfilePatch } from "../core/api/account";
+import type { ListeningActivity, ListeningStats, ProfilePatch } from "../core/api/account";
 import type { DeviceSettings } from "../core/settings/device";
 import type { SyncApi } from "../integration/PlaylistSync";
 
 export interface JuiceVaultApi {
 	catalog: {
 		ready: boolean;
+		events: { on(event: "updated", handler: (count: number) => void): () => void };
 		all(): Song[];
 		get(songId: string): Song | undefined;
 		load(force?: boolean): Promise<void>;
-		search(query: string, limit?: number): Array<{ song: Song; score: number }>;
+		search(query: string, limit?: number): Array<{ song: Song; score: number; matchedName: string | null }>;
+		searchSongs(query: string, limit?: number): Song[];
 	};
 	session: {
 		isSignedIn: boolean;
@@ -25,6 +27,7 @@ export interface JuiceVaultApi {
 		update(patch: ProfilePatch): Promise<Profile>;
 		changePassword(current: string, next: string): Promise<void>;
 		stats(): Promise<ListeningStats | null>;
+		activity(): Promise<ListeningActivity | null>;
 	};
 	device: {
 		get(): DeviceSettings;
@@ -34,6 +37,8 @@ export interface JuiceVaultApi {
 	playList(songs: Song[], index: number, contextName?: string): void;
 	playlists(): Promise<Array<{ uri: string; name: string }>>;
 	addToPlaylist(playlistUri: string, songId: string): Promise<string>;
+	saveToLiked(songId: string): Promise<void>;
+	newPlaylistWith(songId: string): Promise<string>;
 }
 
 export function api(): JuiceVaultApi | null {

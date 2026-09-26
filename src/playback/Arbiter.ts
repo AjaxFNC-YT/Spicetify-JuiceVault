@@ -4,6 +4,8 @@ import { probeCapabilities, type Capabilities } from "../integration/probe";
 import { isJvUri } from "../integration/uri";
 import { buildState, type PlaybackContext } from "./StateProjector";
 import type { ShadowPlayer } from "./ShadowPlayer";
+import { perceivedGain } from "./volume";
+import { getDeviceSettings } from "../core/settings/device";
 import type { Queue } from "./Queue";
 
 const log = createLogger("Arbiter");
@@ -302,8 +304,9 @@ export class Arbiter {
 	private syncVolume(): void {
 		const volume = this.readSpotifyVolume();
 		if (volume === null) return;
-		if (Math.abs(this.player.volume - volume) < 0.001) return;
-		this.player.setVolume(volume);
+		const gain = perceivedGain(volume, getDeviceSettings().volumeTrimDb);
+		if (Math.abs(this.player.volume - gain) < 0.0005) return;
+		this.player.setVolume(gain);
 	}
 
 	private startVolumeSync(): void {

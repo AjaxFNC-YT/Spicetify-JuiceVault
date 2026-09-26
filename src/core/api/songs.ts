@@ -38,15 +38,17 @@ export function peekMetadata(songId: string): SongMetadata | undefined {
 }
 
 export function rememberMetadata(song: Song): void {
-	if (metadataCache.has(song.id)) return;
+	const previous = metadataCache.get(song.id);
 	metadataCache.set(song.id, {
+		...(previous ?? {}),
 		id: song.id,
 		title: song.title,
 		artist: song.artist,
-		album: song.album ?? undefined,
-		year: song.year,
-		duration: song.durationSeconds,
+		album: song.album ?? previous?.album,
+		year: song.year ?? previous?.year ?? null,
+		duration: song.durationSeconds || previous?.duration || 0,
 		length: song.length,
+		cover: song.coverUrl,
 		play_count: song.playCount,
 	});
 }

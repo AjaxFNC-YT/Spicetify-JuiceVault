@@ -1,8 +1,9 @@
 import type { Song, SongCategory } from "../../core/models/song";
 import { albumName } from "../../core/settings/device";
 import { api } from "../bridge";
-import { h, native, notify } from "../h";
+import { h, native, notify, useState } from "../h";
 import { Icon } from "../icons";
+import { StandaloneMenu, type MenuPosition, type MenuSpec } from "./StandaloneMenu";
 
 declare const Spicetify: any;
 
@@ -21,55 +22,119 @@ export interface TrackRowProps {
 	onPlay: () => void;
 	playlists: Array<{ uri: string; name: string }>;
 	detail?: string;
+	standaloneMenu?: boolean;
 }
 
-function trackMenu(song: Song, playlists: Array<{ uri: string; name: string }>, onPlay: () => void): any {
-	const RC = native();
-
-	const add = async (playlistUri: string): Promise<void> => {
+function menuSpec(song: Song, playlists: Array<{ uri: string; name: string }>): MenuSpec[] {
+	const run = async (task: () => Promise<unknown>, done: string, failed: string): Promise<void> => {
 		try {
-			await api()?.addToPlaylist(playlistUri, song.id);
-			notify("Added to playlist");
+			await task();
+			notify(done);
 		} catch {
-			notify("Could not add to that playlist", true);
+			notify(failed, true);
 		}
 	};
 
-	return h(
-		RC.Menu,
-		null,
-		h(RC.MenuItem, { key: "play", onClick: onPlay }, "Play"),
-		h(
-			RC.MenuSubMenuItem,
-			{ key: "add", displayText: "Add to playlist" },
-			playlists.length
-				? playlists.map((playlist) =>
-						h(RC.MenuItem, { key: playlist.uri, onClick: () => void add(playlist.uri) }, playlist.name),
-					)
-				: h(RC.MenuItem, { key: "none", disabled: true }, "No editable playlists"),
-		),
-		h(
-			RC.MenuItem,
-			{
-				key: "copy",
-				onClick: () => {
-					Spicetify.Platform.ClipboardAPI.copy(`${song.title} — ${song.artist}`);
-					notify("Copied");
+	return [
+		{
+			key: "add",
+			label: "Add to playlist",
+			icon: "plus",
+			searchable: "Find a playlist",
+			children: [
+				{
+					key: "new",
+					label: "New playlist",
+					icon: "plus",
+					pinned: true,
+					dividerAfter: true,
+					onClick: () => void run(() => api()!.newPlaylistWith(song.id), `Added to a new playlist`, "Could not create the playlist"),
 				},
+				...playlists.map((playlist) => ({
+					key: playlist.uri,
+					label: playlist.name,
+					onClick: () => void run(() => api()!.addToPlaylist(playlist.uri, song.id), `Added to \u201c${playlist.name}\u201d`, "Could not add to that playlist"),
+				})),
+			],
+		},
+		{
+			key: "like",
+			label: "Save to your Liked Songs",
+			icon: "heart",
+			dividerAfter: true,
+			onClick: () => void run(() => api()!.saveToLiked(song.id), "Added to Liked Songs", "Spotify wouldn't add this to Liked Songs"),
+		},
+		{
+			key: "copy",
+			label: "Copy song name",
+			icon: "copy",
+			onClick: () => {
+				Spicetify.Platform.ClipboardAPI.copy(`${song.title} \u2014 ${song.artist}`);
+				notify("Copied");
 			},
-			"Copy title",
-		),
-	);
+		},
+	];
 }
 
-export function TrackRow({ song, position, playing, onPlay, playlists, detail }: TrackRowProps): any {
+function nativeMenu(items: MenuSpec[]): any {
+	const RC = native();
+	const render = (spec: MenuSpec): any =>
+		spec.children
+			? h(
+					RC.MenuSubMenuItem,
+					{ key: spec.key, displayText: spec.label, leadingIcon: spec.icon ? Icon(spec.icon, 16) : undefined },
+					spec.children.map(render),
+				)
+			: h(
+					RC.MenuItem,
+					{
+						key: spec.key,
+						onClick: spec.onClick,
+						disabled: spec.disabled,
+						leadingIcon: spec.icon ? Icon(spec.icon, 16) : undefined,
+						divider: spec.dividerAfter ? "after" : undefined,
+					},
+					spec.label,
+				);
+	return h(RC.Menu, null, items.map(render));
+}
+
+export function TrackRow({ song, position, playing, onPlay, playlists, detail, standaloneMenu }: TrackRowProps): any {
+	const [menuAt, setMenuAt] = useState<MenuPosition | null>(null);
 	const RC = native();
 	const tag = TAGS[song.category];
-	const menu = trackMenu(song, playlists, onPlay);
+	const items = menuSpec(song, playlists);
+
+	const dots = h(
+		"button",
+		{
+			className: "jv-dots",
+			title: "More options",
+			"data-jv-menu-trigger": standaloneMenu ? "true" : undefined,
+			onClick: (event: any) => {
+				event.stopPropagation();
+				if (!standaloneMenu) return;
+				const rect = event.currentTarget.getBoundingClientRect();
+				setMenuAt(menuAt ? null : { x: rect.right - 240, y: rect.bottom + 4 });
+			},
+		},
+		Icon("more", 16),
+	);
 
 	const row = h(
 		"div",
-		{ className: "jv-row", "data-playing": String(playing), onDoubleClick: onPlay },
+		{
+			className: "jv-row",
+			"data-playing": String(playing),
+			"data-menu": String(Boolean(menuAt)),
+			onDoubleClick: onPlay,
+			onContextMenu: standaloneMenu
+				? (event: any) => {
+						event.preventDefault();
+						setMenuAt({ x: event.clientX, y: event.clientY });
+					}
+				: undefined,
+		},
 		h(
 			"div",
 			null,
@@ -92,19 +157,15 @@ export function TrackRow({ song, position, playing, onPlay, playlists, detail }:
 			"div",
 			{ className: "jv-end" },
 			h("span", { className: "jv-time" }, song.length),
-			h(
-				RC.ContextMenu,
-				{ menu, trigger: "click", action: "toggle" },
-				h(
-					"button",
-					{ className: "jv-dots", title: "More options", onClick: (event: any) => event.stopPropagation() },
-					Icon("more", 16),
-				),
-			),
+			standaloneMenu ? dots : h(RC.ContextMenu, { menu: nativeMenu(items), trigger: "click", action: "toggle" }, dots),
 		),
 	);
 
-	return h(RC.ContextMenu, { menu, trigger: "right-click" }, row);
+	if (standaloneMenu) {
+		return h("div", null, row, h(StandaloneMenu, { items, position: menuAt, onClose: () => setMenuAt(null) }));
+	}
+
+	return h(RC.ContextMenu, { menu: nativeMenu(items), trigger: "right-click" }, row);
 }
 
 export function TrackHeader(secondLabel = "Album"): any {

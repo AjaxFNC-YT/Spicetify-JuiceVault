@@ -10,6 +10,7 @@ export interface ShadowTrack {
 	artist: string;
 	durationSeconds: number;
 	album?: string | null;
+	cover?: string | null;
 }
 
 export interface ShadowPlayerEvents {

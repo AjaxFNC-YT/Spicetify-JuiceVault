@@ -4,6 +4,7 @@ import { LOGO } from "../../assets/logo";
 import type { JuiceVaultApi } from "../bridge";
 import { h, native, useCallback, useEffect, useMemo, useState } from "../h";
 import { useNowPlaying, usePlaylists } from "../hooks";
+import { useQueryParam } from "../router";
 import { Icon } from "../icons";
 import { TrackHeader, TrackRow } from "../components/TrackRow";
 
@@ -33,10 +34,11 @@ function hiddenCategories(profile: Profile | null): Set<Filter> {
 export function Browse({ jv, profile }: { jv: JuiceVaultApi | null; profile: Profile | null }): any {
 	const [songs, setSongs] = useState<Song[]>([]);
 	const [loading, setLoading] = useState(true);
-	const [query, setQuery] = useState("");
+	const linkedQuery = useQueryParam("q");
+	const [query, setQuery] = useState(linkedQuery);
 	const [category, setCategory] = useState<Filter>("all");
 	const [visible, setVisible] = useState(PAGE_SIZE);
-	const [searchOpen, setSearchOpen] = useState(false);
+	const [searchOpen, setSearchOpen] = useState(Boolean(linkedQuery));
 	const nowPlaying = useNowPlaying();
 	const playlists = usePlaylists(jv);
 
@@ -48,8 +50,12 @@ export function Browse({ jv, profile }: { jv: JuiceVaultApi | null; profile: Pro
 			setSongs(jv.catalog.all());
 			setLoading(false);
 		});
+		const stop = jv.catalog.events.on("updated", () => {
+			if (!cancelled) setSongs(jv.catalog.all());
+		});
 		return () => {
 			cancelled = true;
+			stop();
 		};
 	}, [jv]);
 
@@ -61,10 +67,16 @@ export function Browse({ jv, profile }: { jv: JuiceVaultApi | null; profile: Pro
 		if (hidden.has(category)) setCategory("all");
 	}, [hidden, category]);
 
+	useEffect(() => {
+		if (!linkedQuery) return;
+		setQuery(linkedQuery);
+		setSearchOpen(true);
+	}, [linkedQuery]);
+
 	useEffect(() => setVisible(PAGE_SIZE), [query, category]);
 
 	const filtered = useMemo(() => {
-		let list: Song[] = query.trim() && jv ? jv.catalog.search(query, 1000).map((result) => result.song) : songs;
+		let list: Song[] = query.trim() && jv ? jv.catalog.searchSongs(query, 1000) : songs;
 		list = list.filter((song) => !hidden.has(song.category) && !(hideSessions && song.isSessionEdit));
 		if (category !== "all") list = list.filter((song) => song.category === category);
 		return list;

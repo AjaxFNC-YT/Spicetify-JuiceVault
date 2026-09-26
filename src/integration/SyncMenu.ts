@@ -17,12 +17,48 @@ function isTarget(uris: string[]): boolean {
 	return isLikedUri(uri) || Boolean(Spicetify.URI.isPlaylistV1OrV2?.(uri));
 }
 
+const RETRY_MS = 500;
+const GIVE_UP_MS = 30000;
+
+function menuRuntimeReady(): boolean {
+	return Boolean(Spicetify.ReactJSX && Spicetify.ContextMenu?.Item && Spicetify.ContextMenu?.SubMenu && Spicetify.URI);
+}
+
 export function registerSyncMenu(sync: PlaylistSync, session: Session): () => void {
+	const started = Date.now();
+	let stop: (() => void) | null = null;
+	let timer: number | null = null;
+	let disposed = false;
+
+	const attempt = (): void => {
+		timer = null;
+		if (disposed) return;
+		if (menuRuntimeReady()) {
+			try {
+				stop = build(sync, session);
+				return;
+			} catch (error) {
+				log.debug("menu not ready yet", error);
+			}
+		}
+		if (Date.now() - started > GIVE_UP_MS) {
+			log.warn("could not add the JuiceVault playlist menu; Spotify's menu runtime never became ready");
+			return;
+		}
+		timer = window.setTimeout(attempt, RETRY_MS);
+	};
+
+	attempt();
+
+	return () => {
+		disposed = true;
+		if (timer !== null) window.clearTimeout(timer);
+		stop?.();
+	};
+}
+
+function build(sync: PlaylistSync, session: Session): () => void {
 	const menu = Spicetify.ContextMenu;
-	if (!menu?.Item || !menu?.SubMenu) {
-		log.warn("context menus are unavailable; the JuiceVault playlist menu is disabled");
-		return () => {};
-	}
 
 	const resolve = async (uri: string): Promise<Destination | null> => {
 		if (!session.isSignedIn) {

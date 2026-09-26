@@ -1,15 +1,27 @@
 const KEY = "juicevault:device";
 
+export const DEFAULT_TRIM_DB = -6;
+
 export type AlbumMode = "real" | "juicevault" | "custom";
 
 export interface DeviceSettings {
 	resumeOnLaunch: boolean;
+	showInSearch: boolean;
+	searchMode: "spotify" | "juicevault";
+	fuzzySearch: boolean;
+	volumeTrimDb: number;
+	useSpotifyEq: boolean;
 	albumMode: AlbumMode;
 	customAlbum: string;
 }
 
 const DEFAULTS: DeviceSettings = {
 	resumeOnLaunch: true,
+	showInSearch: true,
+	searchMode: "spotify",
+	fuzzySearch: true,
+	volumeTrimDb: DEFAULT_TRIM_DB,
+	useSpotifyEq: true,
 	albumMode: "juicevault",
 	customAlbum: "",
 };

@@ -33,12 +33,17 @@ export function ChangePassword({ jv }: { jv: JuiceVaultApi }): any {
 		}
 	};
 
-	const field = (placeholder: string, value: string, set: (value: string) => void, autoComplete: string): any =>
+	const field = (placeholder: string, value: string, set: (value: string) => void): any =>
 		h("input", {
-			className: "jv-login-input",
-			type: "password",
+			className: "jv-login-input jv-masked",
+			type: "text",
 			placeholder,
-			autoComplete,
+			autoComplete: "off",
+			autoCorrect: "off",
+			autoCapitalize: "off",
+			spellCheck: false,
+			"data-lpignore": "true",
+			"data-form-type": "other",
 			value,
 			onChange: (event: any) => set(event.target.value),
 			onKeyDown: (event: any) => {
@@ -51,9 +56,9 @@ export function ChangePassword({ jv }: { jv: JuiceVaultApi }): any {
 		{ className: "jv-modal jv-modal--form" },
 		h("p", { className: "jv-modal-intro" }, "You'll be logged out everywhere and need to log in again with the new password."),
 		error ? h("div", { className: "jv-login-error" }, error) : null,
-		field("Current password", current, setCurrent, "current-password"),
-		field("New password", next, setNext, "new-password"),
-		field("Confirm new password", confirm, setConfirm, "new-password"),
+		field("Current password", current, setCurrent),
+		field("New password", next, setNext),
+		field("Confirm new password", confirm, setConfirm),
 		h(
 			"div",
 			{ className: "jv-modal-actions" },

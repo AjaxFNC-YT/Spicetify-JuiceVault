@@ -1,5 +1,5 @@
 import type { Profile as ProfileData } from "../../core/auth/session";
-import type { ListeningStats } from "../../core/api/account";
+import type { ListeningActivity, ListeningStats } from "../../core/api/account";
 import { assetUrl } from "../../core/config";
 import { toSong, type Song } from "../../core/models/song";
 import type { JuiceVaultApi } from "../bridge";
@@ -47,6 +47,7 @@ function Stat(value: string, label: string, progress?: number): any {
 
 export function Profile({ jv, profile }: { jv: JuiceVaultApi | null; profile: ProfileData }): any {
 	const [stats, setStats] = useState<ListeningStats | null>(null);
+	const [activity, setActivity] = useState<ListeningActivity | null>(null);
 	const [expanded, setExpanded] = useState(false);
 	const nowPlaying = useNowPlaying();
 	const playlists = usePlaylists(jv);
@@ -59,6 +60,12 @@ export function Profile({ jv, profile }: { jv: JuiceVaultApi | null; profile: Pr
 			.stats()
 			.then((result) => {
 				if (!cancelled) setStats(result);
+			})
+			.catch(() => undefined);
+		void jv.account
+			.activity()
+			.then((result) => {
+				if (!cancelled) setActivity(result);
 			})
 			.catch(() => undefined);
 		return () => {
@@ -82,6 +89,8 @@ export function Profile({ jv, profile }: { jv: JuiceVaultApi | null; profile: Pr
 	const liked = profile.stats?.likedCount ?? 0;
 	const playlistCount = profile.stats?.playlistCount ?? 0;
 	const since = memberSince(profile.createdAt);
+	const completion = archive.completionRate ?? stats?.stats.completionRate ?? 0;
+	const heard = archive.completedSongs ?? stats?.stats.uniqueSongs ?? listening.uniqueSongs ?? 0;
 
 	const shown = expanded ? topSongs : topSongs.slice(0, TOP_PREVIEW);
 	const queue = topSongs.map((entry) => entry.song);
@@ -121,12 +130,14 @@ export function Profile({ jv, profile }: { jv: JuiceVaultApi | null; profile: Pr
 				Stat((listening.totalListens ?? stats?.stats.totalListens ?? 0).toLocaleString(), "Listens"),
 				Stat(formatDuration(listening.totalDuration ?? stats?.stats.totalDuration), "Time listened"),
 				Stat(
-					`${Math.round(archive.completionRate ?? stats?.stats.completionRate ?? 0)}%`,
-					`${(archive.completedSongs ?? 0).toLocaleString()} of ${(archive.totalSongs ?? 0).toLocaleString()} archive songs heard`,
-					archive.completionRate ?? stats?.stats.completionRate ?? 0,
+					`${Math.round(completion)}%`,
+					archive.totalSongs
+						? `${(archive.completedSongs ?? 0).toLocaleString()} of ${archive.totalSongs.toLocaleString()} archive songs heard`
+						: `of the archive heard${heard ? ` \u2022 ${heard.toLocaleString()} songs` : ""}`,
+					completion,
 				),
-				Stat(plural(streak.current ?? 0, "day"), "Current streak"),
-				Stat(plural(streak.longest ?? 0, "day"), "Longest streak"),
+				Stat(plural(activity?.currentStreak ?? streak.current ?? 0, "day"), "Current streak"),
+				Stat(plural(activity?.longestStreak ?? streak.longest ?? 0, "day"), "Longest streak"),
 			),
 		),
 		h(

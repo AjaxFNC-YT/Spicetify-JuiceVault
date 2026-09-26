@@ -1,127 +1,123 @@
 import { createLogger } from "../core/log";
 
+declare const Spicetify: any;
+
 const log = createLogger("SpotifyEq");
+
+const ENABLED_KEY = "audio.equalizer_v2";
+const POLL_MS = 3000;
 
 export interface EqSnapshot {
 	enabled: boolean;
 	gains: number[];
 	frequencies: number[] | null;
-	source: string;
 }
 
-function readFilters(raw: any): { gains: number[]; frequencies: number[] | null } | null {
-	const list = Array.isArray(raw) ? raw : Array.isArray(raw?.filters) ? raw.filters : null;
-	if (!list || !list.length) return null;
+interface Filter {
+	key: string;
+	gain: number;
+	frequency?: number;
+}
 
-	const gains: number[] = [];
-	const frequencies: number[] = [];
+function api(): any {
+	return Spicetify.Platform?.EqualizerAPI ?? null;
+}
 
-	for (const entry of list) {
-		if (typeof entry === "number") {
-			gains.push(entry);
-			continue;
-		}
-		const gain = Number(entry?.gain ?? entry?.value ?? entry?.gainDb);
-		if (!Number.isFinite(gain)) return null;
-		gains.push(gain);
+function parse(list: unknown): Filter[] {
+	if (!Array.isArray(list)) return [];
+	const filters: Filter[] = [];
+	for (const entry of list as any[]) {
+		const gain = Number(entry?.gain);
+		if (!Number.isFinite(gain)) continue;
 		const frequency = Number(entry?.frequency ?? entry?.freq ?? entry?.hz);
-		if (Number.isFinite(frequency)) frequencies.push(frequency);
+		filters.push({ key: String(entry?.key ?? ""), gain, frequency: Number.isFinite(frequency) ? frequency : undefined });
 	}
-
-	if (!gains.length) return null;
-	return { gains, frequencies: frequencies.length === gains.length ? frequencies : null };
+	return filters;
 }
 
-export function readEqualizer(): EqSnapshot | null {
-	const api = Spicetify.Platform?.EqualizerAPI;
-	if (!api) return null;
-
-	const readers: Array<[string, () => any]> = [
-		["getFilters", () => api.getFilters?.()],
-		["filters", () => api.filters],
-		["getEqualizer", () => api.getEqualizer?.()],
-		["getBands", () => api.getBands?.()],
-		["prefs", () => api.prefs],
-	];
-
-	for (const [name, read] of readers) {
-		try {
-			const raw = read();
-			if (!raw || typeof raw.then === "function") continue;
-			const parsed = readFilters(raw);
-			if (!parsed) continue;
-			return {
-				enabled: readEnabled(api),
-				gains: parsed.gains,
-				frequencies: parsed.frequencies,
-				source: name,
-			};
-		} catch {
-			continue;
-		}
-	}
-
-	return null;
+export function initialFrequencies(): number[] | null {
+	const filters = parse(api()?.filters);
+	const frequencies = filters.map((filter) => filter.frequency).filter((value): value is number => typeof value === "number");
+	return frequencies.length === filters.length && frequencies.length ? frequencies : null;
 }
 
-function readEnabled(api: any): boolean {
-	for (const read of [() => api.isEnabled?.(), () => api.enabled, () => api.prefs?.enabled]) {
-		try {
-			const value = read();
-			if (typeof value === "boolean") return value;
-		} catch {
-			continue;
-		}
+async function readEnabled(eq: any): Promise<boolean> {
+	try {
+		const result = await eq.prefs?.get?.({ key: ENABLED_KEY });
+		const value = result?.entries?.[ENABLED_KEY]?.bool;
+		if (typeof value === "boolean") return value;
+	} catch (error) {
+		log.debug("could not read the equalizer switch", error);
 	}
-	return true;
+	return false;
 }
 
-export function describeEqualizer(): Record<string, unknown> {
-	const api = Spicetify.Platform?.EqualizerAPI;
-	if (!api) return { present: false };
+export async function readEqualizer(): Promise<EqSnapshot | null> {
+	const eq = api();
+	if (!eq) return null;
+
+	let filters: Filter[] = [];
+	try {
+		filters = parse(typeof eq.getFilters === "function" ? await eq.getFilters() : eq.filters);
+	} catch (error) {
+		log.debug("getFilters failed, using the cached filters", error);
+		filters = parse(eq.filters);
+	}
+	if (!filters.length) return null;
+
+	const frequencies = filters.map((filter) => filter.frequency);
+	return {
+		enabled: await readEnabled(eq),
+		gains: filters.map((filter) => filter.gain),
+		frequencies: frequencies.every((value) => typeof value === "number") ? (frequencies as number[]) : null,
+	};
+}
+
+export async function describeEqualizer(): Promise<Record<string, unknown>> {
+	const eq = api();
+	if (!eq) return { present: false };
 	return {
 		present: true,
-		ownKeys: Object.keys(api),
-		protoMethods: Object.getOwnPropertyNames(Object.getPrototypeOf(api)),
-		rawFilters: (() => {
-			try {
-				return api.getFilters?.() ?? api.filters ?? null;
-			} catch (error) {
-				return { threw: String(error) };
-			}
-		})(),
-		isSupported: (() => {
-			try {
-				return api.isSupported?.();
-			} catch {
-				return null;
-			}
-		})(),
-		snapshot: readEqualizer(),
+		keys: parse(eq.filters).map((filter) => filter.key),
+		snapshot: await readEqualizer(),
 	};
 }
 
 export function watchEqualizer(onChange: (snapshot: EqSnapshot) => void): () => void {
-	const api = Spicetify.Platform?.EqualizerAPI;
-	let stop = () => {};
+	const eq = api();
+	const cancels: Array<() => void> = [];
+	let pending = false;
 
-	try {
-		const unsubscribe = api?.subscribeToEnabledState?.(() => {
-			const snapshot = readEqualizer();
-			if (snapshot) onChange(snapshot);
-		});
-		if (typeof unsubscribe === "function") stop = unsubscribe;
-	} catch (error) {
-		log.debug("no equalizer subscription", error);
-	}
+	const refresh = (): void => {
+		if (pending) return;
+		pending = true;
+		void readEqualizer()
+			.then((snapshot) => {
+				if (snapshot) onChange(snapshot);
+			})
+			.finally(() => {
+				pending = false;
+			});
+	};
 
-	const timer = window.setInterval(() => {
-		const snapshot = readEqualizer();
-		if (snapshot) onChange(snapshot);
-	}, 2000);
+	const subscribe = (key: string): void => {
+		try {
+			const subscription = eq?.prefs?.sub?.({ key }, () => refresh());
+			const cancel = typeof subscription === "function" ? subscription : subscription?.cancel;
+			if (typeof cancel === "function") cancels.push(() => cancel.call(subscription));
+		} catch (error) {
+			log.debug(`could not subscribe to ${key}`, error);
+		}
+	};
+
+	subscribe(ENABLED_KEY);
+	for (const filter of parse(eq?.filters)) if (filter.key) subscribe(filter.key);
+
+	const timer = window.setInterval(refresh, POLL_MS);
+	refresh();
 
 	return () => {
-		stop();
 		window.clearInterval(timer);
+		for (const cancel of cancels) cancel();
 	};
 }

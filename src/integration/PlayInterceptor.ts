@@ -1,5 +1,6 @@
 import { createLogger } from "../core/log";
 import { albumName } from "../core/settings/device";
+import { assetUrl } from "../core/config";
 import { getMetadata } from "../core/api/songs";
 import { isJvUri, parseSongId, buildTrackUri } from "./uri";
 import { getViewOptions, getContextName, onViewOptionsChanged } from "./Playability";
@@ -843,6 +844,7 @@ export class PlayInterceptor {
 				artist: meta.artist,
 				durationSeconds: meta.duration,
 				album: meta.album ?? null,
+				cover: assetUrl(meta.cover ?? null),
 			});
 			log.info("playing", meta.title);
 		} catch (error) {

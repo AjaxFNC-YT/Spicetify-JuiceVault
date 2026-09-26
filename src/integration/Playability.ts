@@ -70,8 +70,15 @@ function markPlayable(item: any): void {
 
 	const songId = parseSongId(item.uri);
 	if (songId) {
-		const cover = coverUrl(songId);
 		const known = peekMetadata(songId);
+		const cover = known?.cover || coverUrl(songId);
+
+		if (known) {
+			item.name = known.title;
+			const artistUri = item.artists?.[0]?.uri ?? item.uri;
+			item.artists = [{ ...(item.artists?.[0] ?? {}), type: "artist", uri: artistUri, name: known.artist }];
+			if (known.duration > 0) item.duration = { milliseconds: Math.round(known.duration * 1000) };
+		}
 		const images = [
 			{ url: cover, label: "xlarge" },
 			{ url: cover, label: "large" },

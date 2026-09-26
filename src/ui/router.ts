@@ -21,6 +21,22 @@ export function navigate(view: View, replace = false): void {
 	else history.push(target);
 }
 
+export function useQueryParam(name: string): string {
+	const read = (): string => new URLSearchParams(Spicetify.Platform?.History?.location?.search ?? "").get(name) ?? "";
+	const [value, setValue] = useState<string>(read());
+
+	useEffect(() => {
+		const history = Spicetify.Platform?.History;
+		if (!history?.listen) return;
+		const stop = history.listen(() => setValue(read()));
+		return () => {
+			if (typeof stop === "function") stop();
+		};
+	}, []);
+
+	return value;
+}
+
 export function useView(): View {
 	const [view, setView] = useState<View>(readView());
 

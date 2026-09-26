@@ -1,7 +1,7 @@
 import type { Profile } from "../../core/auth/session";
 import { siteUrl } from "../../core/config";
 import { describeError } from "../../core/http/errors";
-import type { AlbumMode } from "../../core/settings/device";
+import { DEFAULT_TRIM_DB, type AlbumMode } from "../../core/settings/device";
 import type { JuiceVaultApi } from "../bridge";
 import { h, native, notify, useEffect, useState } from "../h";
 import { Icon } from "../icons";
@@ -10,11 +10,6 @@ import { navigate } from "../router";
 import { Button, Toggle } from "../components/controls";
 import { ChangePassword } from "../modals/ChangePassword";
 import { RemoveJvSongs } from "../modals/RemoveJvSongs";
-
-const PRIVACY: Array<{ key: string; label: string }> = [
-	{ key: "privateProfile", label: "Make my profile private" },
-	{ key: "showListeningHistory", label: "Show my listening history on my public profile" },
-];
 
 const LIBRARY: Array<{ key: string; label: string }> = [
 	{ key: "hideSessions", label: "Studio sessions" },
@@ -49,7 +44,7 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 	const [bio, setBio] = useState(profile.bio ?? "");
 	const [savingProfile, setSavingProfile] = useState(false);
 	const [prefs, setPrefs] = useState<Record<string, unknown>>(profile.preferences ?? {});
-	const [device, setDevice] = useState(jv?.device.get() ?? { resumeOnLaunch: true, albumMode: "juicevault" as AlbumMode, customAlbum: "" });
+	const [device, setDevice] = useState(jv?.device.get() ?? { resumeOnLaunch: true, showInSearch: true, searchMode: "spotify" as const, fuzzySearch: true, albumMode: "juicevault" as AlbumMode, customAlbum: "", volumeTrimDb: -6, useSpotifyEq: true });
 	const [customAlbum, setCustomAlbum] = useState(device.customAlbum);
 
 	useEffect(() => setPrefs(profile.preferences ?? {}), [profile.preferences]);
@@ -92,6 +87,7 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 	};
 
 	const RC = native();
+	const formatDb = (db: number): string => (db === 0 ? "0 dB" : `${db > 0 ? "+" : ""}${db} dB`);
 	const albumLabel = ALBUM_MODES.find((mode) => mode.id === device.albumMode)?.label ?? "JuiceVault";
 	const albumMenu = h(
 		RC.Menu,
@@ -164,13 +160,6 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 					),
 		),
 		Section(
-			"Privacy",
-			"Synced with your JuiceVault account.",
-			...PRIVACY.map((entry) =>
-				Row(entry.label, Toggle(prefs[entry.key] === true, (value) => void setPreference(entry.key, value), false, entry.label), entry.key),
-			),
-		),
-		Section(
 			"Library",
 			"Choose what appears in the vault. Synced with your JuiceVault account.",
 			...LIBRARY.map((entry) =>
@@ -195,6 +184,34 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 			"This device",
 			null,
 			Row(
+				"Use Spotify's equalizer for JuiceVault songs",
+				Toggle(device.useSpotifyEq, (value) => updateDevice({ useSpotifyEq: value })),
+				undefined,
+				"Applies the bands from Spotify's Settings → Playback → Equalizer.",
+			),
+			Row(
+				"JuiceVault volume",
+				h(
+					"div",
+					{ className: "jv-range" },
+					device.volumeTrimDb !== DEFAULT_TRIM_DB
+						? h("button", { className: "jv-link jv-range-reset", onClick: () => updateDevice({ volumeTrimDb: DEFAULT_TRIM_DB }) }, "Reset")
+						: null,
+					h("input", {
+						type: "range",
+						min: -12,
+						max: 12,
+						step: 0.5,
+						value: device.volumeTrimDb,
+						"aria-label": "JuiceVault volume",
+						onChange: (event: any) => updateDevice({ volumeTrimDb: Number(event.target.value) }),
+					}),
+					h("span", { className: "jv-range-value" }, formatDb(device.volumeTrimDb)),
+				),
+				undefined,
+				"Many leaks are mastered louder than Spotify's songs. Lower this if they sound louder, raise it for quiet ones. Boosts are limited so they never clip.",
+			),
+			Row(
 				"Album shown for JuiceVault songs",
 				h(RC.ContextMenu, { menu: albumMenu, trigger: "click", action: "toggle" }, h("button", { className: "jv-select" }, albumLabel, Icon("chevron-down", 16))),
 				undefined,
@@ -216,6 +233,18 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 						}),
 					)
 				: null,
+			Row(
+				"Show JuiceVault in Spotify search",
+				Toggle(device.showInSearch, (value) => updateDevice({ showInSearch: value })),
+				undefined,
+				"Adds a Spotify / JuiceVault switch to the top of search results.",
+			),
+			Row(
+				"Fuzzy search",
+				Toggle(device.fuzzySearch, (value) => updateDevice({ fuzzySearch: value })),
+				undefined,
+				"Finds songs even with typos or missing letters, like “lcd drms” for Lucid Dreams.",
+			),
 			Row(
 				"Resume the last JuiceVault song when Spotify starts",
 				Toggle(device.resumeOnLaunch, (value) => updateDevice({ resumeOnLaunch: value })),
