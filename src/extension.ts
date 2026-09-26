@@ -276,6 +276,13 @@ async function main(): Promise<void> {
 		dumpEqualizer: () => describeEqualizer(),
 		dumpPlaylist: (uri: string) => playability.inspectPlaylist(uri),
 		equalizer,
+		playList: (songs: any[], index: number, contextName?: string) => interceptor.playFromSongs(songs, index, contextName),
+		playlists: async () => {
+			const contents = await Spicetify.Platform.RootlistAPI.getContents({ limit: 200 });
+			return (contents?.items ?? [])
+				.filter((item: any) => item.type === "playlist" && item.canAdd !== false && item.isOwnedBySelf)
+				.map((item: any) => ({ uri: item.uri, name: item.name }));
+		},
 		isJvUri,
 		parseSongId,
 		claim: () => arbiter.claim(),

@@ -11,6 +11,17 @@ export interface PlaybackContext {
 	index?: number;
 }
 
+const VIDEO_KEY = /(video|canvas|vsi|visual|clip)/i;
+
+function stripMedia(metadata: PlayerState | null | undefined): PlayerState {
+	const clean: PlayerState = {};
+	for (const [key, value] of Object.entries(metadata ?? {})) {
+		if (VIDEO_KEY.test(key)) continue;
+		clean[key] = value;
+	}
+	return clean;
+}
+
 export function buildItem(track: ShadowTrack, baselineItem: PlayerState | null, context?: PlaybackContext): PlayerState {
 	const uri = buildTrackUri({
 		songId: track.songId,
@@ -49,8 +60,11 @@ export function buildItem(track: ShadowTrack, baselineItem: PlayerState | null, 
 			{ url: cover, label: "standard" },
 			{ url: cover, label: "small" },
 		],
+		mediaType: "audio",
+		hasAssociatedVideo: false,
+		associatedVideoUri: null,
 		metadata: {
-			...(baselineItem?.metadata ?? {}),
+			...stripMedia(baselineItem?.metadata),
 			title: track.title,
 			artist_name: track.artist,
 			album_title: "JuiceVault",
@@ -127,6 +141,8 @@ export function buildState(input: ProjectionInput): PlayerState {
 	state.isBuffering = false;
 	state.hasContext = true;
 	state.restrictions = permit(input.baseline?.restrictions);
+	state.mediaPlaybackMode = 0;
+	state.format = null;
 	state.nextItems = input.nextItems ?? [];
 	state.previousItems = input.previousItems ?? [];
 	if (typeof input.shuffle === "boolean") state.shuffle = input.shuffle;

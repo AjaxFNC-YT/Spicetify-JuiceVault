@@ -1,13 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const built = resolve(root, "dist", "juicevault.js");
+const built = resolve(root, "dist", "juicevault-app");
+const manifest = resolve(root, "customapp", "manifest.json");
 
-if (!existsSync(built)) {
-	console.error("dist/juicevault.js is missing — run `npm run build` first");
+if (!existsSync(join(built, "index.js")) || !existsSync(join(built, "extension.js"))) {
+	console.error("dist/juicevault-app is incomplete — run `npm run build` first");
 	process.exit(1);
 }
 
@@ -15,20 +16,32 @@ function spicetify(...args) {
 	return execFileSync("spicetify", args, { encoding: "utf8" }).trim();
 }
 
-const configPath = spicetify("-c");
-const spicetifyRoot = dirname(configPath);
-const extensionsDir = join(spicetifyRoot, "Extensions");
+const spicetifyRoot = dirname(spicetify("-c"));
+const appDir = join(spicetifyRoot, "CustomApps", "juicevault");
 
-if (!existsSync(extensionsDir)) mkdirSync(extensionsDir, { recursive: true });
+if (!existsSync(appDir)) mkdirSync(appDir, { recursive: true });
 
-const target = join(extensionsDir, "juicevault.js");
-copyFileSync(built, target);
-console.log(`copied -> ${target}`);
+copyFileSync(join(built, "index.js"), join(appDir, "index.js"));
+copyFileSync(join(built, "extension.js"), join(appDir, "extension.js"));
+copyFileSync(manifest, join(appDir, "manifest.json"));
+console.log(`installed -> ${appDir}`);
 
-const current = spicetify("config", "extensions");
-if (!current.includes("juicevault.js")) {
-	spicetify("config", "extensions", "juicevault.js");
-	console.log("registered extension");
+const apps = spicetify("config", "custom_apps");
+if (!apps.includes("juicevault")) {
+	spicetify("config", "custom_apps", "juicevault");
+	console.log("registered custom app");
+}
+
+const extensions = spicetify("config", "extensions");
+if (extensions.includes("juicevault.js")) {
+	spicetify("config", "extensions", "juicevault.js-");
+	console.log("removed the standalone extension registration");
+}
+
+const legacy = join(spicetifyRoot, "Extensions", "juicevault.js");
+if (existsSync(legacy)) {
+	rmSync(legacy);
+	console.log("removed the legacy extension file");
 }
 
 console.log(spicetify("apply"));

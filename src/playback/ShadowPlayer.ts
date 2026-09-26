@@ -30,6 +30,7 @@ export class ShadowPlayer {
 
 	private audio: HTMLAudioElement;
 	private track: ShadowTrack | null = null;
+	private loadToken = 0;
 
 	constructor() {
 		const existing = document.getElementById(ELEMENT_ID);
@@ -79,6 +80,7 @@ export class ShadowPlayer {
 
 		this.audio.addEventListener("error", () => {
 			const err = this.audio.error;
+			if (!this.audio.src || err?.code === MediaError.MEDIA_ERR_ABORTED) return;
 			const message = err ? `code ${err.code}: ${err.message || "media error"}` : "unknown media error";
 			log.error(message, this.track?.songId);
 			this.events.emit("error", { track: this.track, message });
@@ -110,19 +112,29 @@ export class ShadowPlayer {
 	}
 
 	async load(track: ShadowTrack, autoplay = true): Promise<void> {
+		const token = ++this.loadToken;
 		this.track = track;
 		this.events.emit("loading", track);
 		this.audio.src = streamUrl(track.songId);
 		this.audio.load();
-		if (autoplay) await this.play();
+		if (autoplay) await this.play(token);
 	}
 
-	async play(): Promise<void> {
+	async play(token = this.loadToken): Promise<void> {
 		if (!this.track) return;
 		try {
 			await this.audio.play();
 		} catch (error) {
+			if (token !== this.loadToken) return;
+
+			const name = error instanceof Error ? error.name : "";
 			const message = error instanceof Error ? error.message : String(error);
+
+			if (name === "AbortError" || /interrupted|new load request/i.test(message)) {
+				log.debug("play superseded by a newer load");
+				return;
+			}
+
 			log.error("play rejected", message);
 			this.events.emit("error", { track: this.track, message });
 		}

@@ -27,6 +27,26 @@ function tokenise(value: string): string[] {
 	return normalise(value).split(" ").filter(Boolean);
 }
 
+function subsequenceScore(term: string, text: string): number {
+	if (term.length < 2) return 0;
+	let index = 0;
+	let score = 0;
+	let streak = 0;
+
+	for (let i = 0; i < text.length && index < term.length; i += 1) {
+		if (text[i] === term[index]) {
+			index += 1;
+			streak += 1;
+			score += 2 + Math.min(streak, 6);
+		} else if (streak) {
+			streak = 0;
+		}
+	}
+
+	if (index < term.length) return 0;
+	return Math.min(score / 2, 22);
+}
+
 export class SearchIndex {
 	private entries: Indexed[] = [];
 
@@ -69,6 +89,8 @@ export class SearchIndex {
 				else if (entry.title.startsWith(term)) termScore = 80;
 				else if (entry.tokens.has(term)) termScore = 50;
 				else if (entry.haystack.includes(term)) termScore = 25;
+
+				if (!termScore) termScore = subsequenceScore(term, entry.haystack);
 
 				if (!termScore) {
 					matchedAll = false;

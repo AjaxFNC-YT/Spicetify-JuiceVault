@@ -8,6 +8,7 @@ import type { Queue } from "../playback/Queue";
 
 const log = createLogger("PlayInterceptor");
 const HANDOFF_LEAD_MS = 450;
+const BROWSE_CONTEXT = "juicevault:browse";
 const SPOTIFY_LEAD_MS = 120;
 
 function toQueueItem(item: any, template: any): any {
@@ -297,7 +298,9 @@ export class PlayInterceptor {
 	}
 
 	private get ownsQueue(): boolean {
-		return !this.queue.isEmpty && this.queue.items_.some((item: any) => isJvUri(item?.uri));
+		if (this.queue.isEmpty) return false;
+		if (this.contextUri === BROWSE_CONTEXT) return true;
+		return this.queue.items_.some((item: any) => isJvUri(item?.uri));
 	}
 
 	private projectQueue(real: any): any {
@@ -631,6 +634,7 @@ export class PlayInterceptor {
 
 	private isSupportedContext(uri: string | undefined): boolean {
 		if (!uri) return false;
+		if (uri === BROWSE_CONTEXT) return true;
 		return uri.startsWith("spotify:playlist:") || uri === "spotify:collection:tracks";
 	}
 
@@ -646,6 +650,8 @@ export class PlayInterceptor {
 	}
 
 	private async fetchContextItems(contextUri: string): Promise<any[]> {
+		if (contextUri === BROWSE_CONTEXT) return this.queue.items_;
+
 		if (contextUri === "spotify:collection:tracks") {
 			const library = Spicetify.Platform.LibraryAPI;
 			const result = await library.getTracks({ limit: 1000, offset: 0 });
@@ -728,14 +734,70 @@ export class PlayInterceptor {
 		if (this.contextUri) void this.loadQueue(this.contextUri, undefined, this.lastSpotifyUri ?? undefined);
 	}
 
+	playFromSongs(songs: any[], index: number, contextName = "JuiceVault"): void {
+		if (!songs?.length) return;
+
+		const items = songs.map((song) => {
+			const uri = buildTrackUri({
+				songId: song.id,
+				artist: song.artist,
+				title: song.title,
+				durationSeconds: song.durationSeconds,
+			});
+			const artist = { type: "artist", uri, name: song.artist };
+			return {
+				type: "track",
+				uri,
+				uid: `jv-${song.id}`,
+				name: song.title,
+				mediaType: "audio",
+				duration: { milliseconds: Math.round(song.durationSeconds * 1000) },
+				album: {
+					type: "album",
+					uri,
+					name: song.album ?? "JuiceVault",
+					artist,
+					images: [{ url: song.coverUrl, label: "standard" }],
+				},
+				artists: [artist],
+				isLocal: true,
+				isExplicit: false,
+				isPlayable: true,
+				hasAssociatedVideo: false,
+				provider: "juicevault",
+				metadata: {},
+				images: [{ url: song.coverUrl, label: "standard" }],
+			};
+		});
+
+		const start = Math.max(0, Math.min(index, items.length - 1));
+		this.contextUri = BROWSE_CONTEXT;
+		this.queue.load(items, start, BROWSE_CONTEXT);
+		this.arbiter.setPlaybackContext({
+			uid: items[start].uid,
+			contextUri: BROWSE_CONTEXT,
+			contextName,
+		});
+
+		void this.playJuiceVault(items[start].uri).then(() => this.syncQueueStore());
+	}
+
 	advanceQueue(direction: 1 | -1): void {
-		if (!this.ownsQueue) return;
-		this.syncCursor();
-		const item = direction === 1 ? this.queue.next() : this.queue.previous();
-		if (!item) {
+		if (this.queue.isEmpty) {
+			log.warn("advance requested with an empty queue");
 			this.player.pause();
 			return;
 		}
+
+		this.syncCursor();
+		const item = direction === 1 ? this.queue.next() : this.queue.previous();
+
+		if (!item) {
+			log.info("reached the end of the queue");
+			this.player.pause();
+			return;
+		}
+
 		void this.playQueueItem(item);
 	}
 

@@ -62,6 +62,8 @@ function markPlayable(item: any): void {
 	item.isPlayable = true;
 	item.isLocal = true;
 	item.isBanned = false;
+	item.hasAssociatedVideo = false;
+	item.mediaType = "audio";
 	if (item.playability) item.playability = "PLAYABLE";
 	if (item.restrictions) item.restrictions = {};
 

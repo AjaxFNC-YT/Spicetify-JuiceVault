@@ -1,0 +1,35 @@
+declare const Spicetify: any;
+
+const FALLBACK: Record<string, string> = {
+	play: "M4 2.2v11.6L14 8z",
+	shuffle: "M1 4h2.6c1.1 0 1.8.5 2.5 1.5l3.2 4.6c.6.9 1.1 1.2 1.9 1.2H14v1.4h-2.8c-1.4 0-2.2-.6-3-1.8L5 6.3c-.5-.7-.9-.9-1.5-.9H1V4zm10.4-2 3 2.6-3 2.6V6.1h-.2c-.8 0-1.3.3-1.9 1.2l-.5.7-.9-1.3.3-.4c.8-1.2 1.7-1.8 3-1.8h.2V2zm0 7.4 3 2.6-3 2.6v-1.7h-.2c-.4 0-.7 0-1-.1v-1.4c.3.1.6.1 1 .1h.2V9.4z",
+	more: "M3 8a1.4 1.4 0 1 1-2.8 0A1.4 1.4 0 0 1 3 8zm5.4 0a1.4 1.4 0 1 1-2.8 0 1.4 1.4 0 0 1 2.8 0zm5.4 0a1.4 1.4 0 1 1-2.8 0 1.4 1.4 0 0 1 2.8 0z",
+	search: "M7 1a6 6 0 1 0 3.7 10.7l3.3 3.3 1-1-3.3-3.3A6 6 0 0 0 7 1zm0 1.5A4.5 4.5 0 1 1 7 11.5 4.5 4.5 0 0 1 7 2.5z",
+	x: "M3 2 8 7l5-5 1 1-5 5 5 5-1 1-5-5-5 5-1-1 5-5-5-5z",
+	sort: "M6 4h9v1.5H6zm0 3.9h9v1.5H6zm0 3.9h9v1.5H6zM1 4h3v1.5H1zm0 3.9h3v1.5H1zm0 3.9h3v1.5H1z",
+	clock: "M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm8.8-4v4.2l2.4 1.4-.8 1.3L7.3 9V4z",
+	plus: "M7.2 2h1.6v5.2H14v1.6H8.8V14H7.2V8.8H2V7.2h5.2z",
+	copy: "M11 2H3a1 1 0 0 0-1 1v9h1.5V3.5H11V2zm2.5 2.5h-7a1 1 0 0 0-1 1V14a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V5.5a1 1 0 0 0-1-1zm-.5 9h-6V6h6v5.5z",
+	check: "M13.5 3.5 6 11 2.5 7.5 1.4 8.6 6 13.2 14.6 4.6z",
+	chevron: "M6 3.5 10.5 8 6 12.5 5 11.5 8.5 8 5 4.5z",
+};
+
+export function iconMarkup(name: string): string {
+	const set = typeof Spicetify !== "undefined" ? Spicetify.SVGIcons : null;
+	const found = set?.[name];
+	if (typeof found === "string" && found.trim()) {
+		return found.trim().startsWith("<") ? found : `<path d="${found}"/>`;
+	}
+	const fallback = FALLBACK[name] ?? "";
+	return fallback ? `<path d="${fallback}"/>` : "";
+}
+
+export function Icon(name: string, size = 16): any {
+	return Spicetify.React.createElement("svg", {
+		width: size,
+		height: size,
+		viewBox: "0 0 16 16",
+		fill: "currentColor",
+		dangerouslySetInnerHTML: { __html: iconMarkup(name) },
+	});
+}
