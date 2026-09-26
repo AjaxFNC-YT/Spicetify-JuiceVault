@@ -1,5 +1,6 @@
+import { openInBrowser } from "../../core/auth/oauth";
 import type { Profile } from "../../core/auth/session";
-import { siteUrl } from "../../core/config";
+import { siteUrl, config } from "../../core/config";
 import { describeError } from "../../core/http/errors";
 import { DEFAULT_TRIM_DB, getDeviceSettings, type AlbumMode } from "../../core/settings/device";
 import type { JuiceVaultApi } from "../bridge";
@@ -408,6 +409,12 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 				}),
 			),
 			Row("Release notes", Button("secondary", "See what's new", { disabled: !jv, onClick: () => void jv?.updates.whatsNew() })),
+			Row(
+				"Found a bug?",
+				Button("secondary", "Report it on Discord", { onClick: () => openInBrowser(config.discordUrl) }),
+				undefined,
+				"JuiceVault for Spotify is in beta. Open a ticket in our Discord server and tell us what happened.",
+			),
 		),
 		h("div", { className: "jv-set-footer" }, Button("secondary", "Log out", { onClick: () => void signOut() })),
 	);

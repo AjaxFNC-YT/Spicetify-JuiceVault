@@ -28,6 +28,7 @@ export class Arbiter {
 	private lastEmitted: unknown = null;
 	private unsubscribeUpdate: (() => void) | null = null;
 	private lastReassert = 0;
+	private trailingReassert: number | null = null;
 	private reassertCount = 0;
 	private volumeTimer: number | null = null;
 
@@ -53,6 +54,18 @@ export class Arbiter {
 
 	setPlaybackContext(context: PlaybackContext | undefined): void {
 		this.context = context;
+	}
+
+	nameContext(contextUri: string, contextName: string): void {
+		if (this.context?.contextUri !== contextUri || this.context.contextName === contextName) return;
+		this.context = { ...this.context, contextName };
+		this.push(true);
+	}
+
+	rememberOptions(options: { shuffle?: boolean; repeat?: number }): void {
+		if (!this.snapshot) return;
+		if (typeof options.shuffle === "boolean") this.snapshot.shuffle = options.shuffle;
+		if (typeof options.repeat === "number") this.snapshot.repeat = options.repeat;
 	}
 
 	private get api(): any {
@@ -103,6 +116,8 @@ export class Arbiter {
 	release(): void {
 		if (!this.claimed) return;
 		this.claimed = false;
+		if (this.trailingReassert !== null) window.clearTimeout(this.trailingReassert);
+		this.trailingReassert = null;
 		this.stopVolumeSync();
 		this.unsubscribeUpdate?.();
 		this.unsubscribeUpdate = null;
@@ -141,7 +156,16 @@ export class Arbiter {
 		if (isJvUri(incoming?.item?.uri)) return;
 
 		const now = Date.now();
-		if (now - this.lastReassert < 200) return;
+		if (now - this.lastReassert < 200) {
+			if (this.trailingReassert === null) {
+				this.trailingReassert = window.setTimeout(() => {
+					this.trailingReassert = null;
+					this.lastReassert = Date.now();
+					this.push(true);
+				}, 220);
+			}
+			return;
+		}
 		this.lastReassert = now;
 		this.reassertCount += 1;
 

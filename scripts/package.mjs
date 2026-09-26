@@ -1,11 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
-const name = `JuiceVault-v${pkg.version}`;
+const name = `JuiceVault-Spicetify-${pkg.version}`;
 const built = resolve(root, "dist", "juicevault-app");
 const releaseDir = resolve(root, "dist", "release");
 const stage = join(releaseDir, name);
@@ -23,12 +23,14 @@ for (const file of ["index.js", "extension.js"]) {
 }
 copyFileSync(resolve(root, "customapp", "manifest.json"), join(stage, "juicevault", "manifest.json"));
 copyFileSync(resolve(root, "install.ps1"), join(stage, "install.ps1"));
+writeFileSync(join(stage, "install.sh"), readFileSync(resolve(root, "install.sh"), "utf8").replace(/\r\n/g, "\n"), { mode: 0o755 });
 
-execFileSync(
-	"powershell",
-	["-NoProfile", "-Command", `Compress-Archive -Path '${join(stage, "*")}' -DestinationPath '${zip}' -Force`],
-	{ stdio: "inherit" },
-);
+if (process.platform === "win32") {
+	const tar = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
+	execFileSync(tar, ["-a", "-c", "-f", zip, "-C", stage, "juicevault", "install.ps1", "install.sh"], { stdio: "inherit" });
+} else {
+	execFileSync("zip", ["-r", "-q", zip, "juicevault", "install.ps1", "install.sh"], { cwd: stage, stdio: "inherit" });
+}
 rmSync(stage, { recursive: true, force: true });
 
 console.log(`\npackaged -> ${zip}`);

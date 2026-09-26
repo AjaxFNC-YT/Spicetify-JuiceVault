@@ -1,6 +1,6 @@
 import { createLogger } from "../core/log";
 import { Emitter } from "../core/emitter";
-import { config, installCommand } from "../core/config";
+import { assetUrl, installCommand, isWindows } from "../core/config";
 import { get } from "../core/http/client";
 import { VERSION, compareVersions, isPrerelease } from "../core/version";
 import { h } from "../ui/h";
@@ -16,16 +16,28 @@ const INSTALL_KEY = "juicevault:installed-version";
 const DISMISSED_KEY = "juicevault:update-dismissed";
 const LEGACY_VERSION_KEY = "juicevault-version";
 const FIRST_CHECK_MS = 2500;
-const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
+const CHECK_EVERY_MS = 60 * 60 * 1000;
 
 export interface Release {
 	version: string;
-	name: string;
 	notes: string;
-	url: string;
 	date: string;
-	prerelease: boolean;
+	downloadUrl: string | null;
 }
+
+interface ApiRelease {
+	version?: string;
+	notes?: string;
+	releasedAt?: string;
+	downloadUrl?: string;
+}
+
+interface Envelope<T> {
+	success: boolean;
+	data: T;
+}
+
+const CHANNEL = isPrerelease(VERSION) ? "beta" : "stable";
 
 export interface UpdateStatus {
 	current: string;
@@ -60,22 +72,29 @@ function hadLegacyExtension(): boolean {
 	}
 }
 
+function toRelease(raw: ApiRelease | null | undefined): Release | null {
+	if (!raw || typeof raw.version !== "string") return null;
+	return {
+		version: raw.version.replace(/^v/i, ""),
+		notes: typeof raw.notes === "string" ? raw.notes : "",
+		date: raw.releasedAt ?? "",
+		downloadUrl: assetUrl(raw.downloadUrl),
+	};
+}
+
 async function fetchReleases(): Promise<Release[]> {
-	const response = await fetch(`https://api.github.com/repos/${config.github.repo}/releases?per_page=20`, {
-		headers: { Accept: "application/vnd.github+json" },
-	});
-	if (!response.ok) throw new Error(`GitHub answered ${response.status}`);
-	const list: any[] = await response.json();
-	return list
-		.filter((entry) => !entry?.draft && typeof entry?.tag_name === "string")
-		.map((entry) => ({
-			version: entry.tag_name.replace(/^v/i, ""),
-			name: entry.name || entry.tag_name,
-			notes: typeof entry.body === "string" ? entry.body : "",
-			url: entry.html_url,
-			date: entry.published_at ?? entry.created_at ?? "",
-			prerelease: Boolean(entry.prerelease),
-		}));
+	const result = await get<Envelope<{ current: ApiRelease | null; history: ApiRelease[] }>>(`/misc/spicetify/versions?channel=${CHANNEL}`, { retries: 1 });
+	const list = [result?.data?.current, ...(result?.data?.history ?? [])].map(toRelease).filter((entry): entry is Release => Boolean(entry));
+	const unique = new Map(list.map((entry) => [entry.version, entry]));
+	return [...unique.values()].sort((a, b) => compareVersions(b.version, a.version));
+}
+
+async function fetchLatest(): Promise<Release | null> {
+	const result = await get<Envelope<{ updateAvailable?: boolean; latest?: ApiRelease }>>(
+		`/misc/spicetify/checkUpdate?version=${encodeURIComponent(VERSION)}&channel=${CHANNEL}`,
+		{ retries: 1 },
+	);
+	return result?.data?.updateAvailable ? toRelease(result.data.latest) : null;
 }
 
 export class Updates {
@@ -151,12 +170,10 @@ export class Updates {
 		this.setState({ checking: true, error: null });
 		try {
 			this.releases = null;
-			const includePre = isPrerelease(VERSION);
-			const newest = (await this.load())
-				.filter((entry) => includePre || !entry.prerelease)
-				.sort((a, b) => compareVersions(b.version, a.version))[0];
-			const available = Boolean(newest && compareVersions(newest.version, VERSION) > 0);
-			this.setState({ latest: newest ?? null, available, checking: false, checkedAt: Date.now() });
+			const found = await fetchLatest();
+			const newest = found && compareVersions(found.version, VERSION) > 0 ? found : null;
+			const available = Boolean(newest);
+			this.setState({ latest: newest, available, checking: false, checkedAt: Date.now() });
 
 			if (available && newest && (manual || read(DISMISSED_KEY) !== newest.version)) {
 				await whenNoModal();
@@ -166,6 +183,7 @@ export class Updates {
 						current: VERSION,
 						release: newest,
 						command: installCommand(),
+						shell: isWindows() ? "PowerShell" : "Terminal",
 						onLater: () => write(DISMISSED_KEY, newest.version),
 					}),
 					true,
@@ -173,7 +191,7 @@ export class Updates {
 			}
 		} catch (error) {
 			log.debug("update check failed", error);
-			this.setState({ checking: false, checkedAt: Date.now(), error: "Couldn't reach GitHub. Try again in a bit." });
+			this.setState({ checking: false, checkedAt: Date.now(), error: "Couldn't check for updates. Try again in a bit." });
 		}
 		return this.state;
 	}

@@ -4,7 +4,7 @@ import { assetUrl } from "../core/config";
 import { getMetadata } from "../core/api/songs";
 import { knownAlbum } from "../core/catalog/albums";
 import { isJvUri, parseSongId, buildTrackUri } from "./uri";
-import { getViewOptions, getContextName, onViewOptionsChanged } from "./Playability";
+import { getViewOptions, getContextName, onViewOptionsChanged, recordContextName } from "./Playability";
 import type { ShadowPlayer } from "../playback/ShadowPlayer";
 import type { Arbiter } from "../playback/Arbiter";
 import type { Queue } from "../playback/Queue";
@@ -351,6 +351,7 @@ export class PlayInterceptor {
 
 		this.shadow("setShuffle", (value: boolean, ...rest: any[]) => {
 			this.queue.setShuffle(Boolean(value));
+			this.arbiter.rememberOptions({ shuffle: Boolean(value) });
 			if (this.arbiter.isClaimed) this.arbiter.push(true);
 			this.assertQueue(true);
 			return this.originals.get("setShuffle")?.(value, ...rest);
@@ -358,6 +359,7 @@ export class PlayInterceptor {
 
 		this.shadow("setRepeat", (mode: number, ...rest: any[]) => {
 			this.queue.setRepeat((mode ?? 0) as 0 | 1 | 2);
+			this.arbiter.rememberOptions({ repeat: mode ?? 0 });
 			if (this.arbiter.isClaimed) this.arbiter.push(true);
 			this.assertQueue(true);
 			return this.originals.get("setRepeat")?.(mode, ...rest);
@@ -811,6 +813,7 @@ export class PlayInterceptor {
 				contextName: getContextName(contextUri) ?? undefined,
 			});
 			this.announceContext(contextUri);
+			void this.nameContext(contextUri);
 			log.debug(`queue loaded: ${items.length} items from ${contextUri}, start ${index}`);
 			this.syncQueueStore();
 			this.scheduleSettledAssert(900);
@@ -818,6 +821,19 @@ export class PlayInterceptor {
 			log.warn("could not load queue from context", error);
 			this.queue.clear();
 			this.contextUri = undefined;
+		}
+	}
+
+	private async nameContext(contextUri: string): Promise<void> {
+		if (contextUri === BROWSE_CONTEXT || getContextName(contextUri)) return;
+		try {
+			const meta = await Spicetify.Platform.PlaylistAPI.getMetadata(contextUri);
+			const name = meta?.name ?? meta?.metadata?.name;
+			if (typeof name !== "string" || !name) return;
+			recordContextName(contextUri, name);
+			this.arbiter.nameContext(contextUri, name);
+		} catch (error) {
+			log.debug("could not look up the playlist name", error);
 		}
 	}
 
@@ -889,7 +905,12 @@ export class PlayInterceptor {
 
 		if (isJvUri(item.uri)) {
 			this.loosePlay = null;
-			this.arbiter.setPlaybackContext({ uid: item.uid, contextUri: this.contextUri });
+			const named = this.arbiter.playbackContext?.contextUri === this.contextUri ? this.arbiter.playbackContext?.contextName : undefined;
+			this.arbiter.setPlaybackContext({
+				uid: item.uid,
+				contextUri: this.contextUri,
+				contextName: named ?? (this.contextUri ? (getContextName(this.contextUri) ?? undefined) : undefined),
+			});
 			await this.playJuiceVault(item.uri);
 			this.syncQueueStore();
 			return;

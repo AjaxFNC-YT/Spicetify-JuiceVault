@@ -8,8 +8,24 @@ import { LOGO } from "../../assets/logo";
 import { Markdown } from "../components/Markdown";
 import { markdownLink } from "../components/NewsBody";
 import { openInBrowser } from "../../core/auth/oauth";
+import { config } from "../../core/config";
 
 declare const Spicetify: any;
+
+export function BetaNote(): any {
+	return h(
+		"div",
+		{ className: "jv-beta" },
+		h("span", { className: "jv-beta-pill" }, "Beta"),
+		h(
+			"p",
+			null,
+			"This is a beta release, so you may run into bugs. If something breaks, open a ticket in our ",
+			h("button", { className: "jv-link", onClick: () => openInBrowser(config.discordUrl) }, "Discord server"),
+			" and let us know.",
+		),
+	);
+}
 
 function releaseDate(iso: string): string {
 	const date = new Date(iso);
@@ -28,10 +44,10 @@ export function WhatsNew({ version, release }: { version: string; release: Relea
 		{ className: "jv-modal jv-news-popup" },
 		h("p", { className: "jv-modal-intro" }, `JuiceVault was updated to version ${version}${date ? `, released ${date}` : ""}.`),
 		h(Notes, { release }),
+		h(BetaNote, null),
 		h(
 			"div",
 			{ className: "jv-modal-actions" },
-			release ? Button("secondary", "View on GitHub", { onClick: () => openInBrowser(release.url) }) : null,
 			Button("primary", "Got it", { onClick: closeModal }),
 		),
 	);
@@ -77,6 +93,7 @@ export function Welcome(): any {
 				),
 			),
 		),
+		h(BetaNote, null),
 		h(
 			"div",
 			{ className: "jv-modal-actions" },
@@ -91,10 +108,22 @@ export function Welcome(): any {
 	);
 }
 
-export function UpdateAvailable({ current, release, command, onLater }: { current: string; release: Release; command: string; onLater: () => void }): any {
+export function UpdateAvailable({
+	current,
+	release,
+	command,
+	shell,
+	onLater,
+}: {
+	current: string;
+	release: Release;
+	command: string;
+	shell: string;
+	onLater: () => void;
+}): any {
 	const copy = (): void => {
 		Spicetify.Platform.ClipboardAPI.copy(command);
-		notify("Copied. Paste it into PowerShell, then restart Spotify.");
+		notify(`Copied. Paste it into ${shell}, then restart Spotify.`);
 	};
 
 	return h(
@@ -102,7 +131,7 @@ export function UpdateAvailable({ current, release, command, onLater }: { curren
 		{ className: "jv-modal jv-news-popup" },
 		h("p", { className: "jv-modal-intro" }, `Version ${release.version} is out. You have version ${current}.`),
 		h(Notes, { release }),
-		h("p", { className: "jv-modal-intro" }, "To update, run this in PowerShell and restart Spotify:"),
+		h("p", { className: "jv-modal-intro" }, `To update, run this in ${shell} and restart Spotify:`),
 		h("code", { className: "jv-code" }, command),
 		h(
 			"div",
@@ -113,7 +142,6 @@ export function UpdateAvailable({ current, release, command, onLater }: { curren
 					closeModal();
 				},
 			}),
-			Button("secondary", "View on GitHub", { onClick: () => openInBrowser(release.url) }),
 			Button("primary", "Copy command", { onClick: copy }),
 		),
 	);

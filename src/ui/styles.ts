@@ -380,6 +380,12 @@ const CSS = `
 .jv-board-handle { font-size: .75rem; color: rgba(255,255,255,.55); }
 .jv-board-value { font-size: .85rem; color: rgba(255,255,255,.8); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+.jv-beta { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 6px; background: rgba(245,197,24,.1);
+  border: 1px solid rgba(245,197,24,.25); }
+.jv-beta p { margin: 0; font-size: .82rem; line-height: 1.45; color: rgba(255,255,255,.85); }
+.jv-beta .jv-link { padding: 0; border: none; background: none; font: inherit; color: #fff; text-decoration: underline; cursor: pointer; }
+.jv-beta-pill { flex: 0 0 auto; margin-top: 1px; padding: 1px 6px; border-radius: 3px; background: #f5c518; color: #000;
+  font-size: .62rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .jv-welcome { display: flex; flex-direction: column; gap: 14px; margin: 4px 0 8px; padding: 0; list-style: none; }
 .jv-welcome-point { display: flex; align-items: flex-start; gap: 14px; }
 .jv-welcome-icon { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%;

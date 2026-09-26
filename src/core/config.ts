@@ -18,6 +18,7 @@ export interface GithubConfig {
 export interface AppConfig {
 	api: ApiConfig;
 	github: GithubConfig;
+	discordUrl: string;
 	siteUrl: string;
 	debug: boolean;
 	dev: DevConfig;
@@ -29,8 +30,13 @@ export function repoUrl(path = ""): string {
 	return `https://github.com/${config.github.repo}${path}`;
 }
 
+export function isWindows(): boolean {
+	return /windows/i.test(navigator.userAgent);
+}
+
 export function installCommand(): string {
-	return `iwr -useb https://raw.githubusercontent.com/${config.github.repo}/${config.github.branch}/install.ps1 | iex`;
+	const base = `https://raw.githubusercontent.com/${config.github.repo}/${config.github.branch}`;
+	return isWindows() ? `iwr -useb ${base}/install.ps1 | iex` : `curl -fsSL ${base}/install.sh | sh`;
 }
 
 export function streamUrl(songId: string): string {

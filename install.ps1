@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-$Repo = "AjaxFNC-YT/Spicetify-JuiceVault"
+$Api = "https://api.juicevault.xyz"
 $AppName = "juicevault"
 
 function Say([string]$Text, [string]$Color = "Gray") {
@@ -61,11 +61,11 @@ try {
 		$Source = Join-Path $PSScriptRoot $AppName
 	} else {
 		Say "Downloading the latest JuiceVault release..."
-		$release = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest" -Headers @{ "User-Agent" = "JuiceVault-Installer" }
-		$asset = $release.assets | Where-Object { $_.name -like "JuiceVault-*.zip" } | Select-Object -First 1
-		if (-not $asset) { throw "The latest release ($($release.tag_name)) has no JuiceVault zip attached." }
-		$download = Join-Path $Work $asset.name
-		Invoke-WebRequest $asset.browser_download_url -OutFile $download -Headers @{ "User-Agent" = "JuiceVault-Installer" }
+		$latest = (Invoke-RestMethod "$Api/misc/spicetify/versions").data.current
+		if (-not $latest -or -not $latest.downloadUrl) { throw "No JuiceVault release is available yet." }
+		$download = Join-Path $Work "JuiceVault.zip"
+		Invoke-WebRequest "$Api$($latest.downloadUrl)" -OutFile $download
+		Say "Got version $($latest.version)"
 		Expand-Archive -Path $download -DestinationPath $Work -Force
 	}
 

@@ -125,9 +125,13 @@ export function buildState(input: ProjectionInput): PlayerState {
 	state.item = buildItem(input.track, input.baseline?.item ?? null, input.context);
 
 	if (input.context?.contextUri) {
+		const sameContext = state.context?.uri === input.context.contextUri;
 		const metadata = { ...(state.context?.metadata ?? {}) };
 		if (input.context.contextName) {
 			metadata.context_description = input.context.contextName;
+			metadata.context_uri = input.context.contextUri;
+		} else if (!sameContext) {
+			delete metadata.context_description;
 			metadata.context_uri = input.context.contextUri;
 		}
 		state.context = { ...(state.context ?? {}), uri: input.context.contextUri, metadata };
