@@ -111,7 +111,6 @@ export function Profile({ jv, profile }: { jv: JuiceVaultApi | null; profile: Pr
 				h("p", { className: "jv-eyebrow" }, "Profile"),
 				h("h1", null, name),
 				h("p", { className: "jv-sub" }, facts.join(" • ")),
-				profile.isVerified === false ? h("p", { className: "jv-warn" }, "Email not verified — verify it on juicevault.xyz to like songs and edit playlists.") : null,
 			),
 		),
 		h(

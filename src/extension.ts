@@ -107,6 +107,7 @@ async function main(): Promise<void> {
 		void catalog.load(true);
 	});
 	const session = new Session();
+	session.events.on("unverified", () => Spicetify.showNotification("Verify your email on juicevault.xyz to use your account in Spotify", true));
 	void session.loadProfile();
 	const playlistSync = new PlaylistSync(session);
 	session.events.on("signedIn", () => {

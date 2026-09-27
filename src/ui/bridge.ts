@@ -22,11 +22,17 @@ export interface JuiceVaultApi {
 	session: {
 		isSignedIn: boolean;
 		user: Profile | null;
-		events: { on(event: "profile", handler: (profile: Profile | null) => void): () => void };
+		unverified: Profile | null;
+		events: {
+			on(event: "profile", handler: (profile: Profile | null) => void): () => void;
+			on(event: "unverified", handler: (profile: Profile | null) => void): () => void;
+		};
 		signIn(login: string, password: string): Promise<Profile>;
 		signInWithTokens(accessToken: string, refreshToken: string): Promise<Profile>;
 		signOut(): Promise<void>;
 		loadProfile(): Promise<Profile | null>;
+		checkVerification(): Promise<boolean>;
+		resendVerification(): Promise<void>;
 	};
 	sync: SyncApi;
 	news: { list(limit?: number, offset?: number): Promise<{ items: NewsItem[]; total: number }>; markSeen(id: string): void; hasUnseen(): boolean };

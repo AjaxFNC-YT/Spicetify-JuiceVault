@@ -1,5 +1,6 @@
 import { siteUrl } from "../../core/config";
-import { describeError } from "../../core/http/errors";
+import { ApiError, describeError } from "../../core/http/errors";
+import { UnverifiedError, type Profile } from "../../core/auth/session";
 import { beginBrowserLogin, openInBrowser, waitForBrowserLogin, type OAuthProvider } from "../../core/auth/oauth";
 import { LOGO } from "../../assets/logo";
 import type { JuiceVaultApi } from "../bridge";
@@ -46,8 +47,24 @@ export function Login({ jv, reason }: { jv: JuiceVaultApi | null; reason?: strin
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [waiting, setWaiting] = useState<{ provider?: OAuthProvider; code: string; controller: AbortController } | null>(null);
+	const [unverified, setUnverified] = useState<Profile | null>(jv?.session.unverified ?? null);
+	const [notice, setNotice] = useState<string | null>(null);
 
 	useEffect(() => () => waiting?.controller.abort(), [waiting]);
+
+	useEffect(() => {
+		if (!jv) return;
+		setUnverified(jv.session.unverified);
+		return jv.session.events.on("unverified", setUnverified);
+	}, [jv]);
+
+	const blocked = (failure: unknown): boolean => {
+		if (!(failure instanceof UnverifiedError)) return false;
+		setUnverified(jv?.session.unverified ?? null);
+		setNotice(null);
+		setError(null);
+		return true;
+	};
 
 	const done = (name: string): void => {
 		notify(`Logged in as ${name}`);
@@ -66,7 +83,7 @@ export function Login({ jv, reason }: { jv: JuiceVaultApi | null; reason?: strin
 			const profile = await jv.session.signIn(login.trim(), password);
 			done(profile.displayName || profile.username);
 		} catch (failure) {
-			setError(describeError(failure, "Could not log in."));
+			if (!blocked(failure)) setError(describeError(failure, "Could not log in."));
 		} finally {
 			setBusy(false);
 		}
@@ -84,7 +101,7 @@ export function Login({ jv, reason }: { jv: JuiceVaultApi | null; reason?: strin
 			const profile = await jv.session.signInWithTokens(tokens.accessToken, tokens.refreshToken);
 			done(profile.displayName || profile.username);
 		} catch (failure) {
-			if (!controller.signal.aborted) setError(describeError(failure, "Could not log in."));
+			if (!controller.signal.aborted && !blocked(failure)) setError(describeError(failure, "Could not log in."));
 		} finally {
 			setWaiting(null);
 		}
@@ -95,6 +112,82 @@ export function Login({ jv, reason }: { jv: JuiceVaultApi | null; reason?: strin
 		h("h1", { key: "title" }, "Log in to JuiceVault"),
 		reason ? h("p", { key: "reason", className: "jv-login-reason" }, reason) : null,
 	];
+
+	if (unverified && jv) {
+		const check = async (): Promise<void> => {
+			if (busy) return;
+			setBusy(true);
+			setError(null);
+			setNotice(null);
+			try {
+				if (await jv.session.checkVerification()) {
+					setUnverified(null);
+					done(unverified.displayName || unverified.username);
+				} else {
+					setError("Your email still isn't verified. Open the link in the email, then try again.");
+				}
+			} catch (failure) {
+				setError(describeError(failure, "Could not check right now."));
+			} finally {
+				setBusy(false);
+			}
+		};
+
+		const resend = async (): Promise<void> => {
+			if (busy) return;
+			setBusy(true);
+			setError(null);
+			try {
+				await jv.session.resendVerification();
+				setNotice(`Sent a new link to ${unverified.email ?? "your email"}.`);
+			} catch (failure) {
+				setNotice(null);
+				setError(
+					failure instanceof ApiError && failure.status === 429
+						? "You just asked for one. Wait a couple of minutes, then try again."
+						: describeError(failure, "Could not send the email."),
+				);
+			} finally {
+				setBusy(false);
+			}
+		};
+
+		const other = async (): Promise<void> => {
+			await jv.session.signOut();
+			setUnverified(null);
+			setError(null);
+			setNotice(null);
+		};
+
+		return h(
+			"div",
+			{ className: "jv-login" },
+			h("img", { className: "jv-login-logo", src: LOGO, alt: "" }),
+			h("h1", null, "Verify your email"),
+			h(
+				"p",
+				{ className: "jv-login-reason" },
+				"JuiceVault for Spotify needs a verified account. Open the link we emailed to ",
+				h("strong", null, unverified.email ?? "you"),
+				", then come back here.",
+			),
+			h(
+				"div",
+				{ className: "jv-login-form jv-login-verify" },
+				error ? h("div", { className: "jv-login-error" }, error) : null,
+				notice ? h("div", { className: "jv-login-notice" }, notice) : null,
+				Button("primary", busy ? "Checking…" : "I've verified it", { disabled: busy, onClick: () => void check() }),
+				Button("secondary", "Send the email again", { disabled: busy, onClick: () => void resend() }),
+			),
+			h(
+				"p",
+				{ className: "jv-login-links" },
+				h("button", { className: "jv-login-textlink", onClick: () => void other() }, "Use a different account"),
+				" · ",
+				h("button", { className: "jv-login-textlink", onClick: () => navigate("browse", true) }, "Keep browsing without an account"),
+			),
+		);
+	}
 
 	if (waiting) {
 		const via = waiting.provider === "google" ? " with Google" : waiting.provider === "discord" ? " with Discord" : "";

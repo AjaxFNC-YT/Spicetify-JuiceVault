@@ -37,6 +37,14 @@ export interface SessionEvents {
 	signedIn: Profile;
 	signedOut: undefined;
 	profile: Profile | null;
+	unverified: Profile | null;
+}
+
+export class UnverifiedError extends Error {
+	constructor(readonly email?: string) {
+		super("Verify your email on juicevault.xyz to use your account in Spotify.");
+		this.name = "UnverifiedError";
+	}
 }
 
 interface Envelope<T> {
@@ -50,10 +58,20 @@ export class Session {
 
 	private tokens: Tokens | null = loadTokens();
 	private profile: Profile | null = null;
+	private pending: Profile | null = null;
 	private refreshing: Promise<Tokens | null> | null = null;
 
 	get isSignedIn(): boolean {
-		return Boolean(this.tokens);
+		return Boolean(this.tokens) && !this.pending;
+	}
+
+	get unverified(): Profile | null {
+		return this.tokens ? this.pending : null;
+	}
+
+	private requireVerified(): Profile {
+		if (this.pending) throw new UnverifiedError(this.pending.email);
+		return this.profile as Profile;
 	}
 
 	get user(): Profile | null {
@@ -91,22 +109,26 @@ export class Session {
 
 		this.tokens = saveTokens(data.accessToken, data.refreshToken);
 		this.profile = data.user ?? null;
-		await this.loadProfile();
-		log.info("signed in as", this.profile?.username ?? login);
+		this.pending = data.user?.isVerified === false ? data.user : null;
+		if (this.pending) this.profile = null;
+		await this.loadProfile(false);
+		const profile = this.requireVerified();
+		log.info("signed in as", profile?.username ?? login);
 
-		if (this.profile) this.events.emit("signedIn", this.profile);
-		this.events.emit("profile", this.profile);
-		return this.profile as Profile;
+		if (profile) this.events.emit("signedIn", profile);
+		this.events.emit("profile", profile);
+		return profile;
 	}
 
 	async signInWithTokens(accessToken: string, refreshToken: string): Promise<Profile> {
 		this.tokens = saveTokens(accessToken, refreshToken);
-		const profile = await this.loadProfile();
+		const profile = (await this.loadProfile(false)) ?? this.pending;
 		if (!profile) {
 			this.tokens = null;
 			clearTokens();
 			throw new Error("Signed in, but JuiceVault didn't return your account.");
 		}
+		this.requireVerified();
 		log.info("signed in as", profile.username);
 		this.events.emit("signedIn", profile);
 		return profile;
@@ -121,6 +143,7 @@ export class Session {
 		const refreshToken = this.tokens?.refreshToken;
 		this.tokens = null;
 		this.profile = null;
+		this.pending = null;
 		clearTokens();
 
 		if (refreshToken) {
@@ -157,6 +180,7 @@ export class Session {
 				log.warn("refresh failed; signing out", error);
 				this.tokens = null;
 				this.profile = null;
+				this.pending = null;
 				clearTokens();
 				this.events.emit("signedOut", undefined);
 				this.events.emit("profile", null);
@@ -200,12 +224,32 @@ export class Session {
 		}
 	}
 
-	async loadProfile(): Promise<Profile | null> {
+	async loadProfile(announce = true): Promise<Profile | null> {
 		if (!this.tokens) return null;
 		try {
 			const result = await this.authed<Envelope<Profile>>("/user/auth/me");
-			this.profile = result?.data ?? null;
-			this.events.emit("profile", this.profile);
+			const loaded = result?.data ?? null;
+
+			if (loaded?.isVerified === false) {
+				const wasActive = Boolean(this.profile) && !this.pending;
+				this.pending = loaded;
+				this.profile = null;
+				log.info("account isn't verified yet; staying signed out");
+				if (announce) {
+					if (wasActive) this.events.emit("signedOut", undefined);
+					this.events.emit("profile", null);
+					this.events.emit("unverified", loaded);
+				}
+				return null;
+			}
+
+			const wasPending = Boolean(this.pending);
+			this.pending = null;
+			this.profile = loaded;
+			if (announce) {
+				if (wasPending && loaded) this.events.emit("signedIn", loaded);
+				this.events.emit("profile", this.profile);
+			}
 			return this.profile;
 		} catch (error) {
 			log.debug("could not load profile", error);
@@ -213,9 +257,18 @@ export class Session {
 		}
 	}
 
+	async checkVerification(): Promise<boolean> {
+		return Boolean(await this.loadProfile());
+	}
+
+	async resendVerification(): Promise<void> {
+		await this.authed("/user/auth/resend-verification", { method: "POST", retries: 0 });
+	}
+
 	get diagnostics(): Record<string, unknown> {
 		return {
 			signedIn: this.isSignedIn,
+			awaitingVerification: Boolean(this.unverified),
 			username: this.profile?.username ?? null,
 			verified: this.profile?.isVerified ?? null,
 			expiresIn: this.tokens ? Math.round((this.tokens.expiresAt - Date.now()) / 1000) + "s" : null,

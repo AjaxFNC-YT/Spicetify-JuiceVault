@@ -136,7 +136,6 @@ const CSS = `
 .jv-avatar--empty { display: flex; align-items: center; justify-content: center; background: #535353; color: #fff; font-weight: 800; }
 .jv-profile-avatar { flex: 0 0 auto; }
 
-.jv-warn { margin: 12px 0 0; font-size: .8rem; color: rgba(255,255,255,.72); }
 .jv-bio { margin: 4px 32px 0; max-width: 720px; font-size: .9rem; line-height: 1.5; color: rgba(255,255,255,.8); white-space: pre-wrap; }
 
 .jv-section { padding: 32px 32px 0; }
@@ -429,6 +428,11 @@ const CSS = `
 .jv-social-icon--discord { color: #5865f2; }
 .jv-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0 4px; color: rgba(255,255,255,.62); font-size: .8rem; }
 .jv-divider::before, .jv-divider::after { content: ""; flex: 1 1 auto; height: 1px; background: rgba(255,255,255,.18); }
+.jv-login-verify { gap: 10px; }
+.jv-login-verify .jv-btn { width: 100%; justify-content: center; }
+.jv-login-notice { margin: 0 0 4px; padding: 12px 14px; border-radius: 4px; background: rgba(30,215,96,.14); color: #fff; font-size: .875rem; }
+.jv-login-textlink { padding: 0; border: none; background: none; color: rgba(255,255,255,.7); font: inherit; text-decoration: underline; cursor: pointer; }
+.jv-login-textlink:hover { color: #fff; }
 .jv-login-waiting { align-items: center; gap: 12px; text-align: center; padding-top: 16px; }
 .jv-login-waiting p { margin: 0; }
 .jv-login-hint { font-size: .8rem; color: rgba(255,255,255,.62); }
