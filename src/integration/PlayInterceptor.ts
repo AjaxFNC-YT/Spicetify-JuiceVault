@@ -588,6 +588,20 @@ export class PlayInterceptor {
 			enumerable: false,
 		});
 
+		if (typeof api.getAvailableShuffleModes === "function") {
+			const available = api.getAvailableShuffleModes.bind(api);
+			this.shadowedTargets.push({ target: api, key: "getAvailableShuffleModes" });
+			Object.defineProperty(api, "getAvailableShuffleModes", {
+				value: (contextUri: string, ...rest: any[]) => {
+					if (this.arbiter.isClaimed && this.ownsQueue && this.sameContext(contextUri)) return Promise.resolve([0, 1, 2]);
+					return available(contextUri, ...rest);
+				},
+				writable: true,
+				configurable: true,
+				enumerable: false,
+			});
+		}
+
 		if (typeof api.getShuffle !== "function") return;
 		const read = api.getShuffle.bind(api);
 		this.shadowedTargets.push({ target: api, key: "getShuffle" });

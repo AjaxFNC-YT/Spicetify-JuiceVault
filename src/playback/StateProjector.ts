@@ -116,6 +116,8 @@ function permit(restrictions: PlayerState | null | undefined): PlayerState {
 	result.disallowPausingReasons = [];
 	result.disallowResumingReasons = [];
 	result.disallowSeekingReasons = [];
+	result.canToggleShuffle = true;
+	result.canToggleSmartShuffle = true;
 	return result;
 }
 
