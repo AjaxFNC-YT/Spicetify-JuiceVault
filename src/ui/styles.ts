@@ -65,7 +65,8 @@ const CSS = `
 .jv-tag[data-colored="true"][data-kind="released"], .jv-native-tag[data-colored="true"][data-kind="released"] { background: rgba(30,215,96,.2); color: #6ee7a0; }
 .jv-tag[data-colored="true"][data-kind="cut"], .jv-native-tag[data-colored="true"][data-kind="cut"] { background: rgba(239,68,68,.22); color: #fca5a5; }
 .jv-native-tags { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; margin-right: 6px; vertical-align: middle; white-space: nowrap; }
-.jv-native-tags[data-slot="title"] { margin: 0 0 0 8px; }
+.jv-native-tags[data-slot="title"] { order: 99; margin: 0 0 0 6px; }
+.jv-native-tags[data-slot="subtitle"] { order: -1; }
 .jv-native-tags .jv-native-tag { flex: 0 0 auto; margin-right: 0; }
 .main-trackList-rowMainContent > :has(> .jv-native-tags), .main-trackInfo-artists:has(> .jv-native-tags) {
   display: flex; align-items: center; min-width: 0; max-width: 100%; overflow: hidden; white-space: nowrap; }
@@ -258,9 +259,6 @@ const CSS = `
 .jv-modal-row[data-selected="true"], .jv-modal-row[data-current="true"] { background: rgba(255,255,255,.07); }
 .jv-modal-row-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
 .jv-modal-row-state { font-size: .75rem; color: rgba(255,255,255,.7); white-space: nowrap; }
-.jv-code { display: block; padding: 10px 12px; border-radius: 4px; background: rgba(255,255,255,.07); color: #fff;
-  font-family: ui-monospace, Consolas, monospace; font-size: .78rem; line-height: 1.5; word-break: break-all; user-select: all; }
-.jv-update-notes { max-height: 40vh; }
 .jv-dp { min-width: min(460px, 80vw); }
 .jv-dp .jv-dp-cover { width: 48px; height: 48px; }
 .jv-dp-search { margin: 0; }
@@ -380,12 +378,39 @@ const CSS = `
 .jv-board-handle { font-size: .75rem; color: rgba(255,255,255,.55); }
 .jv-board-value { font-size: .85rem; color: rgba(255,255,255,.8); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-.jv-beta { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 6px; background: rgba(245,197,24,.1);
-  border: 1px solid rgba(245,197,24,.25); }
-.jv-beta p { margin: 0; font-size: .82rem; line-height: 1.45; color: rgba(255,255,255,.85); }
-.jv-beta .jv-link { padding: 0; border: none; background: none; font: inherit; color: #fff; text-decoration: underline; cursor: pointer; }
-.jv-beta-pill { flex: 0 0 auto; margin-top: 1px; padding: 1px 6px; border-radius: 3px; background: #f5c518; color: #000;
-  font-size: .62rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.jv-update { width: min(460px, 78vw); }
+.jv-update-frame { margin: -8px; overflow: hidden; transition: height .28s cubic-bezier(.3,0,.1,1); }
+.jv-update-inner { padding: 8px; }
+.jv-update-view { display: flex; flex-direction: column; gap: 16px; animation: jv-update-in .22s ease both; }
+@keyframes jv-update-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.jv-update-head { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 4px 0 2px; }
+.jv-update-versions { display: flex; align-items: flex-end; justify-content: center; gap: 18px; }
+.jv-update-arrow { display: flex; padding-bottom: 7px; color: rgba(255,255,255,.4); }
+.jv-update-version { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.jv-update-label { font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.5); }
+.jv-update-number { font-size: 1.6rem; font-weight: 800; line-height: 1.1; color: #fff; font-variant-numeric: tabular-nums; }
+.jv-update-number--old { color: rgba(255,255,255,.55); }
+.jv-update-date { font-size: .78rem; color: rgba(255,255,255,.55); }
+.jv-update-remind-title { margin: 0; font-size: .95rem; font-weight: 700; color: #fff; }
+.jv-update-remind { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.jv-update-remind-option { height: 40px; border: 1px solid rgba(255,255,255,.18); border-radius: 500px; background: none; color: #fff;
+  font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+.jv-update-remind-option:hover { border-color: #fff; background: rgba(255,255,255,.08); transform: scale(1.03); }
+.jv-update-notes { max-height: 34vh; overflow-y: auto; padding: 12px 14px; border-radius: 6px; background: rgba(255,255,255,.05); }
+.jv-update-notes .jv-md { font-size: .85rem; }
+.jv-update-notes .jv-md > :last-child { margin-bottom: 0; }
+.jv-update-empty { margin: 0; font-size: .85rem; color: rgba(255,255,255,.6); }
+.jv-update-how { margin: 0; font-size: .82rem; color: rgba(255,255,255,.65); }
+.jv-update-command { display: flex; align-items: center; gap: 8px; margin-top: -10px; padding: 6px 6px 6px 12px; border-radius: 6px; background: rgba(255,255,255,.07); }
+.jv-update-command code { flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: nowrap; font-family: ui-monospace, Consolas, monospace; font-size: .76rem; color: #fff; scrollbar-width: none; }
+.jv-update-copy { display: flex; flex: 0 0 auto; padding: 6px; border: none; border-radius: 4px; background: none; color: rgba(255,255,255,.7); cursor: pointer; }
+.jv-update-copy:hover { background: rgba(255,255,255,.1); color: #fff; }
+.jv-update-copy[data-copied="true"] { color: var(--spice-button-active, #1ed760); }
+.jv-update-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.jv-beta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 0; font-size: .78rem; color: rgba(255,255,255,.6); }
+.jv-beta-pill { margin-right: 4px; padding: 1px 6px; border: 1px solid rgba(255,255,255,.3); border-radius: 3px;
+  font-size: .6rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.75); }
+.jv-beta-link { padding: 0; border: none; background: none; font: inherit; color: #fff; text-decoration: underline; cursor: pointer; }
 .jv-welcome { display: flex; flex-direction: column; gap: 14px; margin: 4px 0 8px; padding: 0; list-style: none; }
 .jv-welcome-point { display: flex; align-items: flex-start; gap: 14px; }
 .jv-welcome-icon { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%;

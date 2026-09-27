@@ -62,9 +62,10 @@ export class Arbiter {
 		this.push(true);
 	}
 
-	rememberOptions(options: { shuffle?: boolean; repeat?: number }): void {
+	rememberOptions(options: { shuffle?: boolean; smartShuffle?: boolean; repeat?: number }): void {
 		if (!this.snapshot) return;
 		if (typeof options.shuffle === "boolean") this.snapshot.shuffle = options.shuffle;
+		if (typeof options.smartShuffle === "boolean") this.snapshot.smartShuffle = options.smartShuffle;
 		if (typeof options.repeat === "number") this.snapshot.repeat = options.repeat;
 	}
 
@@ -224,6 +225,7 @@ export class Arbiter {
 				nextItems: this.queue.upcoming(50),
 				previousItems: this.queue.history(20),
 				shuffle: this.queue.shuffle,
+				smartShuffle: this.queue.shuffle && this.queue.smart,
 				repeat: this.queue.repeat,
 			});
 			this.lastEmitted = state;

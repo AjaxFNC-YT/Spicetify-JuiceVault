@@ -4,7 +4,7 @@
 		"playSource": "spicetify",
 		"timeoutMs": 15000
 	},
-	"debug": true,
+	"debug": false,
 	"dev": {
 		"sampleSongId": "dbfc1729-6918-48a2-888d-703072961b74"
 	},

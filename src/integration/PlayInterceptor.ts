@@ -1,8 +1,10 @@
 import { createLogger } from "../core/log";
-import { albumName } from "../core/settings/device";
+import { albumName, getDeviceSettings, onDeviceSettings, type SmartAmount } from "../core/settings/device";
 import { assetUrl } from "../core/config";
 import { getMetadata } from "../core/api/songs";
 import { knownAlbum } from "../core/catalog/albums";
+import { songKind, type Song } from "../core/models/song";
+import type { ItemRef } from "../playback/Queue";
 import { isJvUri, parseSongId, buildTrackUri } from "./uri";
 import { getViewOptions, getContextName, onViewOptionsChanged, recordContextName } from "./Playability";
 import type { ShadowPlayer } from "../playback/ShadowPlayer";
@@ -13,6 +15,40 @@ const log = createLogger("PlayInterceptor");
 const HANDOFF_LEAD_MS = 450;
 const BROWSE_CONTEXT = "juicevault:browse";
 const SPOTIFY_LEAD_MS = 120;
+const SMART_MIN = 5;
+const SMART_MAX = 60;
+const SMART_SHARE: Record<SmartAmount, number> = { few: 0.15, some: 0.3, lots: 0.5 };
+const SMART_SETTINGS = ["smartShuffle", "smartSpotify", "smartVault", "smartSessions", "smartStems", "smartReleased", "smartSameEra", "smartAmount"];
+
+function pick<T>(list: T[], count: number): T[] {
+	const pool = [...list];
+	const out: T[] = [];
+	while (pool.length && out.length < count) out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]!);
+	return out;
+}
+
+function recommendedTrack(track: any, uid: string): any {
+	const album = track?.album ?? {};
+	const image = album.largeImageUrl ?? album.imageUrl ?? album.images?.[0]?.url ?? track?.imageUrl ?? null;
+	const images = image ? [{ url: image, label: "standard" }] : [];
+	return {
+		type: "track",
+		uri: track.uri,
+		uid,
+		name: track.name ?? "",
+		mediaType: "audio",
+		duration: { milliseconds: Number(track.duration ?? track.durationMs ?? track.duration_ms ?? 0) },
+		album: { type: "album", uri: album.uri, name: album.name ?? "", images },
+		artists: (track.artists ?? []).map((artist: any) => ({ type: "artist", uri: artist.uri, name: artist.name })),
+		isLocal: false,
+		isExplicit: Boolean(track.explicit),
+		hasAssociatedVideo: false,
+		provider: "context",
+		recommended: true,
+		metadata: {},
+		images,
+	};
+}
 
 function toQueueItem(item: any, template: any): any {
 	if (!item) return item;
@@ -194,6 +230,11 @@ export class PlayInterceptor {
 	private loosePlay: string | null = null;
 	private resumeSpotify = false;
 	private queueSerial = 0;
+	private loadTicket = 0;
+	private recommendTicket = 0;
+	private stopSettings: (() => void) | null = null;
+	private vaultSource: () => Song[] = () => [];
+	private loadingContext: string | null = null;
 
 	constructor(
 		private readonly player: ShadowPlayer,
@@ -244,6 +285,7 @@ export class PlayInterceptor {
 
 		this.shadowTransport();
 		this.shadowQueueService();
+		this.shadowShuffleApi();
 		this.unsubscribeViewOptions = onViewOptionsChanged((uri) => {
 			if (uri !== this.contextUri) return;
 			log.info("playlist sort changed, rebuilding queue");
@@ -251,6 +293,9 @@ export class PlayInterceptor {
 		});
 		this.watchUpdates();
 		this.watchQueueUpdates();
+		this.stopSettings = onDeviceSettings(({ patch }) => {
+			if (this.queue.smart && Object.keys(patch).some((key) => SMART_SETTINGS.includes(key))) void this.loadRecommendations();
+		});
 		this.syncFromCurrentState();
 		log.info("installed");
 	}
@@ -350,10 +395,10 @@ export class PlayInterceptor {
 		});
 
 		this.shadow("setShuffle", (value: boolean, ...rest: any[]) => {
-			this.queue.setShuffle(Boolean(value));
-			this.arbiter.rememberOptions({ shuffle: Boolean(value) });
-			if (this.arbiter.isClaimed) this.arbiter.push(true);
-			this.assertQueue(true);
+			const mode = value ? (this.queue.smart ? 2 : 1) : 0;
+			this.applyShuffle(mode);
+			void this.saveContextShuffle(mode);
+			if (this.arbiter.isClaimed) return Promise.resolve();
 			return this.originals.get("setShuffle")?.(value, ...rest);
 		});
 
@@ -366,20 +411,49 @@ export class PlayInterceptor {
 		});
 
 		this.shadow("addToQueue", (items: any[], ...rest: any[]) => {
-			const list = Array.isArray(items) ? items.filter((item) => typeof item?.uri === "string") : [];
+			const list = this.refsOf(items);
 			if (!list.length || (!this.ownsQueue && !list.some((item) => isJvUri(item.uri)))) {
 				return this.originals.get("addToQueue")?.(items, ...rest);
 			}
-			return this.enqueue(list.map((item) => item.uri));
+			return this.enqueue(list.map((item) => item.uri!), "add");
+		});
+
+		this.shadow("insertIntoQueue", (items: any[], options: any, ...rest: any[]) => {
+			const list = this.refsOf(items);
+			if (!list.length || (!this.ownsQueue && !list.some((item) => isJvUri(item.uri)))) {
+				return this.originals.get("insertIntoQueue")?.(items, options, ...rest);
+			}
+			const target = options?.after ?? options?.before;
+			return this.enqueue(list.map((item) => item.uri!), "insert", target ? { target, after: Boolean(options?.after) } : undefined);
 		});
 
 		this.shadow("removeFromQueue", (items: any[], ...rest: any[]) => {
-			const list = Array.isArray(items) ? items : [];
-			const removed = this.queue.unqueue((queued) =>
-				list.some((item) => (item?.uid ? item.uid === queued.uid : item?.uri === queued.uri)),
-			);
+			const list = this.refsOf(items);
+			let removed = this.queue.unqueue((queued) => list.some((item) => (item.uid ? item.uid === queued.uid : item.uri === queued.uri)));
+			if (this.ownsQueue) removed += this.queue.removeUpcoming(list);
 			if (!removed) return this.originals.get("removeFromQueue")?.(items, ...rest);
 			this.afterQueueChange();
+			this.queueActionDone("remove");
+			return Promise.resolve();
+		});
+
+		this.shadow("clearQueue", (...args: any[]) => {
+			if (!this.ownsQueue || !this.queue.queuedItems.length) return this.originals.get("clearQueue")?.(...args);
+			this.queue.clearQueued();
+			this.afterQueueChange();
+			this.queueActionDone("clear");
+			return Promise.resolve();
+		});
+
+		this.shadow("reorderQueue", (items: any[], options: any, ...rest: any[]) => {
+			const list = this.refsOf(items);
+			const target = options?.after ?? options?.before;
+			if (!this.ownsQueue || !target || !list.length || !list.every((item) => this.queue.owns(item))) {
+				return this.originals.get("reorderQueue")?.(items, options, ...rest);
+			}
+			this.queue.reorder(list, target, Boolean(options?.after));
+			this.afterQueueChange();
+			this.queueActionDone("reorder");
 			return Promise.resolve();
 		});
 
@@ -388,6 +462,145 @@ export class PlayInterceptor {
 			const real = original ? original(...args) : {};
 			if (real && typeof real.then === "function") return real.then((value: any) => this.projectQueue(value));
 			return this.projectQueue(real);
+		});
+	}
+
+	private get shuffleMode(): number {
+		return this.queue.shuffle ? (this.queue.smart ? 2 : 1) : 0;
+	}
+
+	private applyShuffle(mode: number): void {
+		const on = mode !== 0;
+		this.queue.setShuffle(on);
+		this.queue.setSmart(mode === 2);
+		this.arbiter.rememberOptions({ shuffle: on, smartShuffle: mode === 2 });
+		if (mode === 2) void this.loadRecommendations();
+		if (this.arbiter.isClaimed) this.arbiter.push(true);
+		this.assertQueue(true);
+	}
+
+	setVaultSource(source: () => Song[]): void {
+		this.vaultSource = source;
+	}
+
+	private refsOf(items: unknown): ItemRef[] {
+		return (Array.isArray(items) ? items : []).filter((item) => typeof item?.uri === "string" || typeof item?.uid === "string");
+	}
+
+	private queueActionDone(action: string, snackbar = false): void {
+		const events = typeof this.api?.getEvents === "function" ? this.api.getEvents() : this.api?._events;
+		if (typeof events?.emitQueueActionComplete === "function") events.emitQueueActionComplete(action, null, snackbar);
+		else if (snackbar) Spicetify.showNotification("Added to queue");
+	}
+
+	private async spotifyRecommendations(contextUri: string, count: number): Promise<any[]> {
+		const api = Spicetify.Platform?.PlaylistAPI;
+		if (!count || typeof api?.getRecommendedTracks !== "function") return [];
+		const skip = this.queue.items_
+			.map((item: any) => item?.uri)
+			.filter((uri: unknown): uri is string => typeof uri === "string" && uri.startsWith("spotify:track:"))
+			.slice(0, 500)
+			.map((uri: string) => uri.split(":")[2]!);
+		try {
+			const tracks: any[] = await api.getRecommendedTracks(contextUri, skip, count);
+			return (tracks ?? [])
+				.filter((track) => typeof track?.uri === "string" && !this.queue.contains(track.uri))
+				.map((track, index) => recommendedTrack(track, `jvr-s${Date.now().toString(36)}-${index}`));
+		} catch (error) {
+			log.debug("Spotify had no recommendations for this context", error);
+			return [];
+		}
+	}
+
+	private vaultRecommendations(count: number): any[] {
+		if (!count) return [];
+		const settings = getDeviceSettings();
+		const kinds = new Set(["main"]);
+		if (settings.smartSessions) kinds.add("session");
+		if (settings.smartStems) kinds.add("stem");
+		if (settings.smartReleased) kinds.add("released");
+
+		const inContext = new Set(this.queue.items_.map((item: any) => parseSongId(item?.uri ?? "")).filter(Boolean));
+		const albums = new Set([...inContext].map((songId) => knownAlbum(songId!)).filter(Boolean));
+		const candidates = this.vaultSource().filter((song) => kinds.has(songKind(song)) && !inContext.has(song.id));
+		const related = settings.smartSameEra ? candidates.filter((song) => albums.has(song.album ?? knownAlbum(song.id))) : [];
+		const chosen = pick(related, Math.ceil(count * 0.7));
+		const taken = new Set(chosen.map((song) => song.id));
+		chosen.push(...pick(candidates.filter((song) => !taken.has(song.id)), count - chosen.length));
+		return chosen.map((song, index) => ({ ...jvItem(song, `jvr-v${Date.now().toString(36)}-${index}`), provider: "context", recommended: true }));
+	}
+
+	private async loadRecommendations(): Promise<void> {
+		const contextUri = this.contextUri;
+		if (!contextUri || !this.queue.smart) return;
+		const ticket = (this.recommendTicket += 1);
+		const settings = getDeviceSettings();
+
+		if (!settings.smartShuffle || (!settings.smartSpotify && !settings.smartVault)) {
+			this.queue.setRecommendations([]);
+			if (this.arbiter.isClaimed) this.arbiter.push(true);
+			this.assertQueue(true);
+			return;
+		}
+
+		const items = this.queue.items_;
+		const total = Math.max(1, items.length);
+		const vaultShare = items.filter((item: any) => isJvUri(item?.uri)).length / total;
+		const wanted = Math.min(SMART_MAX, Math.max(SMART_MIN, Math.round(total * SMART_SHARE[settings.smartAmount])));
+		const spotifyWanted = contextUri === BROWSE_CONTEXT || !settings.smartSpotify ? 0 : Math.round(wanted * (settings.smartVault ? 1 - vaultShare : 1));
+
+		const spotify = await this.spotifyRecommendations(contextUri, spotifyWanted);
+		if (ticket !== this.recommendTicket || this.contextUri !== contextUri || !this.queue.smart) return;
+		const vault = settings.smartVault && (vaultShare > 0 || !settings.smartSpotify) ? this.vaultRecommendations(wanted - spotify.length) : [];
+
+		this.queue.setRecommendations([...spotify, ...vault]);
+		log.info(`smart shuffle added ${spotify.length} Spotify and ${vault.length} JuiceVault recommendations`);
+		if (this.arbiter.isClaimed) this.arbiter.push(true);
+		this.assertQueue(true);
+	}
+
+	private sameContext(uri: unknown): boolean {
+		if (typeof uri !== "string" || !this.contextUri) return false;
+		const plain = (value: string): string => value.replace(/^spotify:user:[^:]+:playlist:/, "spotify:playlist:");
+		return plain(uri) === plain(this.contextUri);
+	}
+
+	private shadowShuffleApi(): void {
+		const api = Spicetify.Platform?.ShuffleAPI;
+		if (typeof api?.setShuffle !== "function") return;
+		const original = api.setShuffle.bind(api);
+		this.shadowedTargets.push({ target: api, key: "setShuffle" });
+
+		Object.defineProperty(api, "setShuffle", {
+			value: async (contextUri: string, mode: number, ...rest: any[]) => {
+				if (!this.ownsQueue || !this.sameContext(contextUri)) return original(contextUri, mode, ...rest);
+
+				this.applyShuffle(mode);
+				if (!this.arbiter.isClaimed) return original(contextUri, mode, ...rest);
+
+				api._sessionShuffleStates?.set?.(contextUri, mode);
+				api._events?.emitUpdateShuffleModeSync?.(contextUri, mode);
+				await this.saveContextShuffle(mode);
+				api._events?.emitUpdateShuffleModeCompleteSync?.(contextUri, mode);
+			},
+			writable: true,
+			configurable: true,
+			enumerable: false,
+		});
+
+		if (typeof api.getShuffle !== "function") return;
+		const read = api.getShuffle.bind(api);
+		this.shadowedTargets.push({ target: api, key: "getShuffle" });
+		Object.defineProperty(api, "getShuffle", {
+			value: (contextUri: string, ...rest: any[]) => {
+				if (this.arbiter.isClaimed && this.ownsQueue && this.sameContext(contextUri)) {
+					return Promise.resolve(this.shuffleMode);
+				}
+				return read(contextUri, ...rest);
+			},
+			writable: true,
+			configurable: true,
+			enumerable: false,
 		});
 	}
 
@@ -404,23 +617,24 @@ export class PlayInterceptor {
 		this.syncCursor();
 		const template = (Array.isArray(real.nextUp) ? real.nextUp[0] : null) ?? real.current ?? null;
 
-		if (this.queue.isEmpty) {
-			const shaped = { ...real };
-			if (this.queue.playingQueued) shaped.current = toQueueItem(this.queue.current, template);
-			shaped.nextUp = [
-				...this.queue.queuedItems.map((item: any) => toQueueItem(item, template)),
-				...(Array.isArray(real.nextUp) ? real.nextUp : []),
-			];
+		const shaped = { ...real, queued: this.queue.queuedItems.map((item: any) => toQueueItem(item, template)) };
+
+		if (this.loadingContext) {
+			const playing = this.arbiter.isClaimed ? this.api?._state?.item : null;
+			if (playing?.uri) shaped.current = toQueueItem(playing, template);
+			shaped.nextUp = [];
 			return shaped;
 		}
 
-		const upcoming = this.queue.upcoming(40);
-		if (!upcoming.length) return real;
+		if (this.queue.isEmpty) {
+			if (this.queue.playingQueued) shaped.current = toQueueItem(this.queue.current, template);
+			shaped.nextUp = Array.isArray(real.nextUp) ? real.nextUp : [];
+			return shaped;
+		}
 
-		const shaped = { ...real };
 		const current = this.queue.current;
 		if (current) shaped.current = toQueueItem(current, template);
-		shaped.nextUp = upcoming.map((item: any) => toQueueItem(item, template));
+		shaped.nextUp = this.queue.contextUpcoming(40).map((item: any) => toQueueItem(item, template));
 		return shaped;
 	}
 
@@ -794,19 +1008,69 @@ export class PlayInterceptor {
 		return items;
 	}
 
-	private async loadQueue(contextUri: string, targetUid?: string, targetUri?: string): Promise<void> {
+	private shuffleApi(): any {
+		const api = Spicetify.Platform?.ContextualShuffleAPI;
+		return typeof api?.getContextualShuffleMode === "function" ? api : null;
+	}
+
+	private async contextShuffle(contextUri: string): Promise<number | null> {
+		const api = this.shuffleApi();
+		if (!api || contextUri === BROWSE_CONTEXT) return null;
 		try {
-			const items = await this.fetchContextItems(contextUri);
+			const mode = await api.getContextualShuffleMode(contextUri);
+			return typeof mode === "number" ? mode : null;
+		} catch (error) {
+			log.debug("could not read the playlist's shuffle setting", error);
+			return null;
+		}
+	}
+
+	private async saveContextShuffle(mode: number): Promise<void> {
+		const api = this.shuffleApi();
+		const contextUri = this.contextUri;
+		if (!api || !contextUri || contextUri === BROWSE_CONTEXT || typeof api.setContextualShuffleMode !== "function") return;
+		try {
+			await api.setContextualShuffleMode(contextUri, mode);
+		} catch (error) {
+			log.debug("could not save the playlist's shuffle setting", error);
+		}
+	}
+
+	private async loadQueue(contextUri: string, targetUid?: string, targetUri?: string): Promise<void> {
+		const ticket = (this.loadTicket += 1);
+		const switching = this.queue.contextUri !== contextUri;
+		if (switching) {
+			this.loadingContext = contextUri;
+			this.assertQueue(true);
+		}
+		const stale = (): boolean => {
+			if (ticket !== this.loadTicket) return true;
+			if (this.contextUri === contextUri) return false;
+			this.loadingContext = null;
+			return true;
+		};
+
+		try {
+			const [items, shuffle] = await Promise.all([this.fetchContextItems(contextUri), switching ? this.contextShuffle(contextUri) : Promise.resolve(null)]);
+			if (stale()) return;
+			if (shuffle !== null) {
+				this.queue.shuffle = shuffle !== 0;
+				this.queue.smart = shuffle === 2;
+				this.arbiter.rememberOptions({ shuffle: shuffle !== 0, smartShuffle: shuffle === 2 });
+			}
 			let index = targetUid ? items.findIndex((item) => item.uid === targetUid) : -1;
 			if (index < 0 && targetUri) index = items.findIndex((item) => item.uri === targetUri);
 			if (!items.length) {
 				log.warn("context returned no items, standing down:", contextUri);
+				this.loadingContext = null;
 				this.queue.clear();
 				this.contextUri = undefined;
 				return;
 			}
 
 			this.queue.load(items, Math.max(0, index), contextUri);
+			this.loadingContext = null;
+			if (this.queue.smart && this.queue.shuffle) void this.loadRecommendations();
 			this.arbiter.setPlaybackContext({
 				...(this.arbiter.playbackContext ?? {}),
 				contextUri,
@@ -815,10 +1079,13 @@ export class PlayInterceptor {
 			this.announceContext(contextUri);
 			void this.nameContext(contextUri);
 			log.debug(`queue loaded: ${items.length} items from ${contextUri}, start ${index}`);
+			if (this.arbiter.isClaimed) this.arbiter.push(true);
 			this.syncQueueStore();
 			this.scheduleSettledAssert(900);
 		} catch (error) {
+			if (stale()) return;
 			log.warn("could not load queue from context", error);
+			this.loadingContext = null;
 			this.queue.clear();
 			this.contextUri = undefined;
 		}
@@ -920,7 +1187,7 @@ export class PlayInterceptor {
 		this.arbiter.release();
 
 		try {
-			if (item.provider === "queue" || !this.contextUri) {
+			if (item.provider === "queue" || item.recommended || !this.contextUri) {
 				this.loosePlay = item.uri;
 				await this.original?.(item.uri, {}, {});
 			} else {
@@ -932,7 +1199,7 @@ export class PlayInterceptor {
 		}
 	}
 
-	private async enqueue(uris: string[]): Promise<void> {
+	private async enqueue(uris: string[], action: "add" | "insert", place?: { target: ItemRef; after: boolean }): Promise<void> {
 		const spotify = await spotifyItems(uris.filter((uri) => !isJvUri(uri)));
 		const items: any[] = [];
 
@@ -959,12 +1226,10 @@ export class PlayInterceptor {
 		}
 
 		if (!items.length) return;
-		this.queue.enqueue(items);
+		const added = this.queue.enqueue(items);
+		if (place) this.queue.reorder(added.map((item) => ({ uid: item.uid })), place.target, place.after);
 		this.afterQueueChange();
-
-		const events = typeof this.api?.getEvents === "function" ? this.api.getEvents() : this.api?._events;
-		if (typeof events?.emitQueueActionComplete === "function") events.emitQueueActionComplete("add", null, true);
-		else Spicetify.showNotification("Added to queue");
+		this.queueActionDone(action, action === "add");
 	}
 
 	private afterQueueChange(): void {
@@ -1044,6 +1309,8 @@ export class PlayInterceptor {
 	}
 
 	dispose(): void {
+		this.stopSettings?.();
+		this.stopSettings = null;
 		this.unsubscribeViewOptions?.();
 		this.unsubscribeViewOptions = null;
 		if (this.settleTimer !== null) window.clearTimeout(this.settleTimer);

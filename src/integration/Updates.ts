@@ -14,6 +14,8 @@ const log = createLogger("Updates");
 const SEEN_KEY = "juicevault:version-seen";
 const INSTALL_KEY = "juicevault:installed-version";
 const DISMISSED_KEY = "juicevault:update-dismissed";
+const REMIND_KEY = "juicevault:update-remind";
+const HOUR_MS = 60 * 60 * 1000;
 const LEGACY_VERSION_KEY = "juicevault-version";
 const FIRST_CHECK_MS = 2500;
 const CHECK_EVERY_MS = 60 * 60 * 1000;
@@ -155,6 +157,31 @@ export class Updates {
 		await this.whatsNew();
 	}
 
+	private snoozed(version: string): boolean {
+		try {
+			const saved = JSON.parse(read(REMIND_KEY) ?? "null");
+			return saved?.version === version && Number(saved.until) > Date.now();
+		} catch {
+			return false;
+		}
+	}
+
+	async previewUpdate(): Promise<void> {
+		const [major = 0, minor = 0, patch = 0] = VERSION.split("-")[0]!.split(".").map(Number);
+		let notes = "";
+		try {
+			notes = (await this.load())[0]?.notes ?? "";
+		} catch {
+			notes = "";
+		}
+		const release: Release = { version: `${major}.${minor}.${patch + 1}`, notes, date: new Date().toISOString(), downloadUrl: null };
+		await whenNoModal();
+		openModal(
+			"Update available",
+			h(UpdateAvailable, { current: VERSION, release, command: installCommand(), shell: isWindows() ? "PowerShell" : "Terminal", onSkip: () => undefined, onRemind: () => undefined }),
+		);
+	}
+
 	async whatsNew(): Promise<void> {
 		let release: Release | null = null;
 		try {
@@ -163,7 +190,7 @@ export class Updates {
 			log.debug("could not load release notes", error);
 		}
 		await whenNoModal();
-		openModal(`What's new in ${VERSION}`, h(WhatsNew, { version: VERSION, release }), true);
+		openModal("What's new", h(WhatsNew, { version: VERSION, release }));
 	}
 
 	async check(manual: boolean): Promise<UpdateStatus> {
@@ -175,7 +202,7 @@ export class Updates {
 			const available = Boolean(newest);
 			this.setState({ latest: newest, available, checking: false, checkedAt: Date.now() });
 
-			if (available && newest && (manual || read(DISMISSED_KEY) !== newest.version)) {
+			if (available && newest && (manual || (read(DISMISSED_KEY) !== newest.version && !this.snoozed(newest.version)))) {
 				await whenNoModal();
 				openModal(
 					"Update available",
@@ -184,9 +211,9 @@ export class Updates {
 						release: newest,
 						command: installCommand(),
 						shell: isWindows() ? "PowerShell" : "Terminal",
-						onLater: () => write(DISMISSED_KEY, newest.version),
+						onSkip: () => write(DISMISSED_KEY, newest.version),
+						onRemind: (hours: number) => write(REMIND_KEY, JSON.stringify({ version: newest.version, until: Date.now() + hours * HOUR_MS })),
 					}),
-					true,
 				);
 			}
 		} catch (error) {

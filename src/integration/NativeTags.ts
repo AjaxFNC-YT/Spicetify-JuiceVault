@@ -86,7 +86,14 @@ export function registerNativeTags(catalog: Catalog): () => void {
 			for (const group of existing) group.remove();
 			return;
 		}
-		if (existing.length === 1 && existing[0]!.dataset.signature === signature && existing[0]!.parentElement === target) return;
+		if (existing.length === 1 && existing[0]!.dataset.signature === signature && existing[0]!.parentElement === target) {
+			const group = existing[0]!;
+			if (append ? group !== target.lastElementChild : group !== target.firstElementChild) {
+				if (append) target.append(group);
+				else target.prepend(group);
+			}
+			return;
+		}
 		for (const group of existing) group.remove();
 
 		const group = document.createElement("span");

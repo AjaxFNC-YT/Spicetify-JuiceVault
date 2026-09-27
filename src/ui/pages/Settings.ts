@@ -2,7 +2,7 @@ import { openInBrowser } from "../../core/auth/oauth";
 import type { Profile } from "../../core/auth/session";
 import { siteUrl, config } from "../../core/config";
 import { describeError } from "../../core/http/errors";
-import { DEFAULT_TRIM_DB, getDeviceSettings, type AlbumMode } from "../../core/settings/device";
+import { DEFAULT_TRIM_DB, getDeviceSettings, type AlbumMode, type SmartAmount } from "../../core/settings/device";
 import type { JuiceVaultApi } from "../bridge";
 import { h, native, notify, useEffect, useState } from "../h";
 import { Icon } from "../icons";
@@ -21,6 +21,12 @@ const LIBRARY: Array<{ key: string; label: string }> = [
 	{ key: "hideRemasters", label: "Remasters" },
 	{ key: "hideInstrumentals", label: "Instrumentals" },
 	{ key: "hideStems", label: "Stems" },
+];
+
+const SMART_AMOUNTS: Array<{ id: SmartAmount; label: string }> = [
+	{ id: "few", label: "A few" },
+	{ id: "some", label: "Some" },
+	{ id: "lots", label: "Lots" },
 ];
 
 const ALBUM_MODES: Array<{ id: AlbumMode; label: string }> = [
@@ -171,6 +177,25 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 		),
 	);
 
+	const amountLabel = SMART_AMOUNTS.find((amount) => amount.id === device.smartAmount)?.label ?? "Some";
+	const amountMenu = h(
+		RC.Menu,
+		null,
+		SMART_AMOUNTS.map((amount) =>
+			h(
+				RC.MenuItem,
+				{
+					key: amount.id,
+					onClick: () => updateDevice({ smartAmount: amount.id }),
+					trailingIcon: device.smartAmount === amount.id ? Icon("check", 16) : undefined,
+				},
+				amount.label,
+			),
+		),
+	);
+	const smartOn = device.smartShuffle;
+	const vaultOn = smartOn && device.smartVault;
+
 	return h(
 		"div",
 		{ className: "jv-settings" },
@@ -286,6 +311,47 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 			Row(
 				"Resume the last JuiceVault song when Spotify starts",
 				Toggle(device.resumeOnLaunch, (value) => updateDevice({ resumeOnLaunch: value })),
+			),
+		),
+		Section(
+			"Smart shuffle",
+			"How smart shuffle adds songs that aren't in the playlist, while JuiceVault is playing it.",
+			Row(
+				"Add recommendations",
+				Toggle(device.smartShuffle, (value) => updateDevice({ smartShuffle: value })),
+				undefined,
+				"Turn this off and smart shuffle works like normal shuffle.",
+			),
+			Row(
+				"Recommend Spotify songs",
+				Toggle(device.smartSpotify, (value) => updateDevice({ smartSpotify: value }), !smartOn),
+				undefined,
+				"Songs Spotify suggests for the playlist.",
+			),
+			Row(
+				"Recommend JuiceVault songs",
+				Toggle(device.smartVault, (value) => updateDevice({ smartVault: value }), !smartOn),
+				undefined,
+				"Unreleased songs from the vault. Instrumentals, remasters and cut files are never added.",
+			),
+			Row("Include sessions", Toggle(device.smartSessions, (value) => updateDevice({ smartSessions: value }), !vaultOn)),
+			Row("Include stems", Toggle(device.smartStems, (value) => updateDevice({ smartStems: value }), !vaultOn)),
+			Row("Include released songs", Toggle(device.smartReleased, (value) => updateDevice({ smartReleased: value }), !vaultOn)),
+			Row(
+				"Prefer the same era",
+				Toggle(device.smartSameEra, (value) => updateDevice({ smartSameEra: value }), !vaultOn),
+				undefined,
+				"Most vault picks come from the same albums and eras as the playlist.",
+			),
+			Row(
+				"How many",
+				h(
+					RC.ContextMenu,
+					{ menu: amountMenu, trigger: "click", action: "toggle" },
+					h("button", { className: "jv-select", disabled: !smartOn }, amountLabel, Icon("chevron-down", 16)),
+				),
+				undefined,
+				"Roughly 15%, 30% or 50% extra songs on top of the playlist.",
 			),
 		),
 		Section(

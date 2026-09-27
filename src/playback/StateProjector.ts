@@ -94,6 +94,7 @@ export interface ProjectionInput {
 	nextItems?: any[];
 	previousItems?: any[];
 	shuffle?: boolean;
+	smartShuffle?: boolean;
 	repeat?: number;
 }
 
@@ -152,6 +153,7 @@ export function buildState(input: ProjectionInput): PlayerState {
 	state.nextItems = input.nextItems ?? [];
 	state.previousItems = input.previousItems ?? [];
 	if (typeof input.shuffle === "boolean") state.shuffle = input.shuffle;
+	if (typeof input.smartShuffle === "boolean") state.smartShuffle = input.smartShuffle;
 	if (typeof input.repeat === "number") state.repeat = input.repeat;
 
 	return state;

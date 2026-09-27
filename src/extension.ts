@@ -387,6 +387,7 @@ async function main(): Promise<void> {
 			status: () => updates.status,
 			check: () => updates.check(true),
 			whatsNew: () => updates.whatsNew(),
+			...(config.debug ? { previewUpdate: () => updates.previewUpdate() } : {}),
 			on: (handler: (status: UpdateStatus) => void) => updates.events.on("status", handler),
 		},
 		albums: {
@@ -460,6 +461,7 @@ async function main(): Promise<void> {
 	guard("announcements", () => announcements.start(), undefined);
 	unregisterSyncMenu = guard("playlist menu", () => registerSyncMenu(playlistSync, session), () => {});
 	unregisterTrackMenu = guard("track menu", () => registerTrackMenu(catalog, api.showSongInfo), () => {});
+	interceptor.setVaultSource(() => catalog.all());
 	unregisterNativeTags = guard("native tags", () => registerNativeTags(catalog), () => {});
 	if (session.isSignedIn) guard("playlist sync", () => playlistSync.start(), undefined);
 

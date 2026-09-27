@@ -1,5 +1,5 @@
 import type { Release } from "../../integration/Updates";
-import { h, notify } from "../h";
+import { h, notify, useEffect, useState } from "../h";
 import { closeModal } from "../modal";
 import { navigate } from "../router";
 import { Button } from "../components/controls";
@@ -14,16 +14,12 @@ declare const Spicetify: any;
 
 export function BetaNote(): any {
 	return h(
-		"div",
+		"p",
 		{ className: "jv-beta" },
 		h("span", { className: "jv-beta-pill" }, "Beta"),
-		h(
-			"p",
-			null,
-			"This is a beta release, so you may run into bugs. If something breaks, open a ticket in our ",
-			h("button", { className: "jv-link", onClick: () => openInBrowser(config.discordUrl) }, "Discord server"),
-			" and let us know.",
-		),
+		"Found a bug? Open a ticket in our ",
+		h("button", { className: "jv-beta-link", onClick: () => openInBrowser(config.discordUrl) }, "Discord"),
+		".",
 	);
 }
 
@@ -33,22 +29,31 @@ function releaseDate(iso: string): string {
 }
 
 function Notes({ release }: { release: Release | null }): any {
-	if (!release?.notes.trim()) return h("p", { className: "jv-modal-note" }, "Release notes aren't available right now.");
-	return h("div", { className: "jv-news-scroll jv-update-notes" }, Markdown(release.notes, markdownLink));
+	const body = release?.notes.trim()
+		? Markdown(release.notes, markdownLink)
+		: h("p", { className: "jv-update-empty" }, "Release notes aren't available right now.");
+	return h("div", { className: "jv-update-notes" }, body);
+}
+
+function Version({ label, version, date }: { label: string; version: string; date?: string }): any {
+	return h(
+		"div",
+		{ className: "jv-update-head" },
+		h("div", { className: "jv-update-version" }, h("span", { className: "jv-update-label" }, label), h("span", { className: "jv-update-number" }, version)),
+		date ? h("span", { className: "jv-update-date" }, `Released ${date}`) : null,
+	);
 }
 
 export function WhatsNew({ version, release }: { version: string; release: Release | null }): any {
-	const date = release ? releaseDate(release.date) : "";
 	return h(
 		"div",
-		{ className: "jv-modal jv-news-popup" },
-		h("p", { className: "jv-modal-intro" }, `JuiceVault was updated to version ${version}${date ? `, released ${date}` : ""}.`),
-		h(Notes, { release }),
-		h(BetaNote, null),
+		{ className: "jv-modal jv-update" },
 		h(
 			"div",
-			{ className: "jv-modal-actions" },
-			Button("primary", "Got it", { onClick: closeModal }),
+			{ className: "jv-update-view" },
+			h(Version, { label: "Now on", version, date: release ? releaseDate(release.date) : "" }),
+			h(Notes, { release }),
+			h("div", { className: "jv-update-footer" }, h(BetaNote, null), Button("primary", "Got it", { onClick: closeModal })),
 		),
 	);
 }
@@ -108,41 +113,148 @@ export function Welcome(): any {
 	);
 }
 
+const REMIND_OPTIONS: Array<{ label: string; hours: number }> = [
+	{ label: "1 hour", hours: 1 },
+	{ label: "2 hours", hours: 2 },
+	{ label: "3 hours", hours: 3 },
+	{ label: "6 hours", hours: 6 },
+	{ label: "12 hours", hours: 12 },
+	{ label: "1 day", hours: 24 },
+	{ label: "3 days", hours: 72 },
+	{ label: "1 week", hours: 168 },
+];
+
+const COPIED_MS = 1800;
+
+function useHeight(): [(element: HTMLElement | null) => void, number | undefined] {
+	const [element, setElement] = useState<HTMLElement | null>(null);
+	const [height, setHeight] = useState<number | undefined>(undefined);
+
+	useEffect(() => {
+		if (!element) return;
+		const measure = (): void => setHeight(element.offsetHeight);
+		const observer = new ResizeObserver(measure);
+		observer.observe(element);
+		measure();
+		return () => observer.disconnect();
+	}, [element]);
+
+	return [setElement, height];
+}
+
+function CopyCommand({ command }: { command: string }): any {
+	const [copied, setCopied] = useState(false);
+
+	useEffect(() => {
+		if (!copied) return;
+		const timer = window.setTimeout(() => setCopied(false), COPIED_MS);
+		return () => window.clearTimeout(timer);
+	}, [copied]);
+
+	return h(
+		"div",
+		{ className: "jv-update-command" },
+		h("code", null, command),
+		h(
+			"button",
+			{
+				className: "jv-update-copy",
+				"data-copied": String(copied),
+				title: copied ? "Copied" : "Copy",
+				"aria-label": copied ? "Copied" : "Copy command",
+				onClick: () => {
+					Spicetify.Platform.ClipboardAPI.copy(command);
+					setCopied(true);
+				},
+			},
+			Icon(copied ? "check" : "copy", 16),
+		),
+	);
+}
+
 export function UpdateAvailable({
 	current,
 	release,
 	command,
 	shell,
-	onLater,
+	onSkip,
+	onRemind,
 }: {
 	current: string;
 	release: Release;
 	command: string;
 	shell: string;
-	onLater: () => void;
+	onSkip: () => void;
+	onRemind: (hours: number) => void;
 }): any {
-	const copy = (): void => {
-		Spicetify.Platform.ClipboardAPI.copy(command);
-		notify(`Copied. Paste it into ${shell}, then restart Spotify.`);
+	const [view, setView] = useState<"update" | "remind">("update");
+	const show = (next: "update" | "remind") => (event: any): void => {
+		event.stopPropagation();
+		window.setTimeout(() => setView(next), 0);
 	};
+	const [measure, height] = useHeight();
+	const date = releaseDate(release.date);
 
-	return h(
+	const update = h(
 		"div",
-		{ className: "jv-modal jv-news-popup" },
-		h("p", { className: "jv-modal-intro" }, `Version ${release.version} is out. You have version ${current}.`),
+		{ key: "update", className: "jv-update-view" },
+		h(
+			"div",
+			{ className: "jv-update-head" },
+			h(
+				"div",
+				{ className: "jv-update-versions" },
+				h("div", { className: "jv-update-version" }, h("span", { className: "jv-update-label" }, "You have"), h("span", { className: "jv-update-number jv-update-number--old" }, current)),
+				h("span", { className: "jv-update-arrow" }, Icon("chevron", 16)),
+				h("div", { className: "jv-update-version" }, h("span", { className: "jv-update-label" }, "New"), h("span", { className: "jv-update-number" }, release.version)),
+			),
+			date ? h("span", { className: "jv-update-date" }, `Released ${date}`) : null,
+		),
 		h(Notes, { release }),
-		h("p", { className: "jv-modal-intro" }, `To update, run this in ${shell} and restart Spotify:`),
-		h("code", { className: "jv-code" }, command),
+		h("p", { className: "jv-update-how" }, `Run this in ${shell}, then restart Spotify:`),
+		h(CopyCommand, { command }),
 		h(
 			"div",
 			{ className: "jv-modal-actions" },
-			Button("secondary", "Later", {
+			Button("secondary", "Skip this version", {
 				onClick: () => {
-					onLater();
+					onSkip();
 					closeModal();
 				},
 			}),
-			Button("primary", "Copy command", { onClick: copy }),
+			Button("primary", "Remind me later", { onClick: show("remind") }),
 		),
+	);
+
+	const remind = h(
+		"div",
+		{ key: "remind", className: "jv-update-view" },
+		h("p", { className: "jv-update-remind-title" }, "Remind me in"),
+		h(
+			"div",
+			{ className: "jv-update-remind" },
+			REMIND_OPTIONS.map((option) =>
+				h(
+					"button",
+					{
+						key: option.hours,
+						className: "jv-update-remind-option",
+						onClick: () => {
+							onRemind(option.hours);
+							closeModal();
+							notify(`We'll remind you about ${release.version} in ${option.label}`);
+						},
+					},
+					option.label,
+				),
+			),
+		),
+		h("div", { className: "jv-modal-actions" }, Button("secondary", "Back", { onClick: show("update") })),
+	);
+
+	return h(
+		"div",
+		{ className: "jv-modal jv-update" },
+		h("div", { className: "jv-update-frame", style: { height } }, h("div", { ref: measure, className: "jv-update-inner" }, view === "update" ? update : remind)),
 	);
 }

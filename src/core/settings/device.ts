@@ -7,6 +7,8 @@ export const DEFAULT_TRIM_DB = -6;
 
 export type AlbumMode = "real" | "juicevault" | "custom";
 
+export type SmartAmount = "few" | "some" | "lots";
+
 export interface DeviceSettings {
 	resumeOnLaunch: boolean;
 	showInSearch: boolean;
@@ -25,6 +27,14 @@ export interface DeviceSettings {
 	jvCopyLink: boolean;
 	copySongName: boolean;
 	showAltNames: boolean;
+	smartShuffle: boolean;
+	smartSpotify: boolean;
+	smartVault: boolean;
+	smartSessions: boolean;
+	smartStems: boolean;
+	smartReleased: boolean;
+	smartSameEra: boolean;
+	smartAmount: SmartAmount;
 }
 
 const DEFAULTS: DeviceSettings = {
@@ -45,6 +55,14 @@ const DEFAULTS: DeviceSettings = {
 	jvCopyLink: true,
 	copySongName: true,
 	showAltNames: true,
+	smartShuffle: true,
+	smartSpotify: true,
+	smartVault: true,
+	smartSessions: true,
+	smartStems: true,
+	smartReleased: true,
+	smartSameEra: true,
+	smartAmount: "some",
 };
 
 export interface DeviceSettingsChange {
