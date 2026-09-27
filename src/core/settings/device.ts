@@ -1,6 +1,7 @@
 import { Emitter } from "../emitter";
 
 const KEY = "juicevault:device";
+const CHANGED_KEY = "juicevault:device-changed";
 
 export const DEFAULT_TRIM_DB = -6;
 
@@ -46,10 +47,34 @@ const DEFAULTS: DeviceSettings = {
 	showAltNames: true,
 };
 
-const changes = new Emitter<{ changed: { settings: DeviceSettings; patch: Partial<DeviceSettings> } }>();
+export interface DeviceSettingsChange {
+	settings: DeviceSettings;
+	patch: Partial<DeviceSettings>;
+	remote: boolean;
+}
 
-export function onDeviceSettings(handler: (change: { settings: DeviceSettings; patch: Partial<DeviceSettings> }) => void): () => void {
+const changes = new Emitter<{ changed: DeviceSettingsChange }>();
+
+export function onDeviceSettings(handler: (change: DeviceSettingsChange) => void): () => void {
 	return changes.on("changed", handler);
+}
+
+export const SYNCED_KEYS = Object.keys(DEFAULTS) as Array<keyof DeviceSettings>;
+
+export function settingsChangedAt(): number {
+	try {
+		return Number(Spicetify.LocalStorage.get(CHANGED_KEY)) || 0;
+	} catch {
+		return 0;
+	}
+}
+
+export function pickKnown(values: Record<string, unknown>): Partial<DeviceSettings> {
+	const known: Record<string, unknown> = {};
+	for (const key of SYNCED_KEYS) {
+		if (key in values && typeof values[key] === typeof DEFAULTS[key]) known[key] = values[key];
+	}
+	return known as Partial<DeviceSettings>;
 }
 
 export function getDeviceSettings(): DeviceSettings {
@@ -61,14 +86,15 @@ export function getDeviceSettings(): DeviceSettings {
 	}
 }
 
-export function setDeviceSettings(patch: Partial<DeviceSettings>): DeviceSettings {
+export function setDeviceSettings(patch: Partial<DeviceSettings>, remote = false, changedAt = Date.now()): DeviceSettings {
 	const next = { ...getDeviceSettings(), ...patch };
 	try {
 		Spicetify.LocalStorage.set(KEY, JSON.stringify(next));
+		Spicetify.LocalStorage.set(CHANGED_KEY, String(changedAt));
 	} catch {
 		return next;
 	}
-	changes.emit("changed", { settings: next, patch });
+	changes.emit("changed", { settings: next, patch, remote });
 	return next;
 }
 

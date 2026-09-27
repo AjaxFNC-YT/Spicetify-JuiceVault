@@ -9,9 +9,9 @@
 		"sampleSongId": "dbfc1729-6918-48a2-888d-703072961b74"
 	},
 	"siteUrl": "https://juicevault.xyz",
-	"github": {
-		"repo": "AjaxFNC-YT/Spicetify-JuiceVault",
-		"branch": "main"
-	},
-	"discordUrl": "https://discord.com/invite/h76mqj5dWQ"
+	"discordUrl": "https://discord.com/invite/h76mqj5dWQ",
+	"installer": {
+		"windows": "/juicevault-spicetify-installer.ps1",
+		"unix": "/juicevault-spicetify-installer.sh"
+	}
 }

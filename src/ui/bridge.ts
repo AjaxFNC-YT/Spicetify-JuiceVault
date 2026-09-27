@@ -46,6 +46,7 @@ export interface JuiceVaultApi {
 	device: {
 		get(): DeviceSettings;
 		set(patch: Partial<DeviceSettings>): DeviceSettings;
+		on(handler: (settings: DeviceSettings) => void): () => void;
 	};
 	player: { current: { songId: string } | null; isPlaying: boolean };
 	playList(songs: Song[], index: number, contextName?: string): void;

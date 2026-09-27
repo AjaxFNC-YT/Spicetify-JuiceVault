@@ -1,57 +1,91 @@
-# Juice Vault                                          
-- ⭐ MAKE SURE TO STAR THE PROJECT IF YOU ENJOY!
+# JuiceVault for Spotify
 
-A Spicetify extension that lets you stream and download unreleased Juice WRLD tracks directly in Spotify.
+The Juice WRLD archive inside Spotify. JuiceVault adds vault songs to Spotify natively, so they play in Spotify's
+own player, queue, playlists and Liked Songs like any other song.
 
-![Juice Vault](preview.png)
+![JuiceVault](preview.png)
+
+> **Beta:** this is a beta release, so you may run into bugs. Please report them in our
+> [Discord server](https://discord.com/invite/h76mqj5dWQ) by opening a ticket.
 
 ## Features
 
-- 🎵 **1,400+ Unreleased Songs** - Access a massive vault of unreleased Juice WRLD tracks
-- 🔍 **Search** - Find songs instantly with real-time search
-- ▶️ **Integrated Player** - Play vault songs without leaving Spotify
-- ⬇️ **Download** - Download any song directly to your device
-- 🔊 **Volume Sync** - Volume syncs with Spotify's volume controls
-- 🎨 **Modern UI** - Beautiful gradient-styled player with Spotify-like aesthetics
+- Play thousands of unreleased Juice WRLD songs in Spotify's own player, with shuffle, repeat, seeking and the queue
+- Add vault songs to your Spotify playlists and Liked Songs
+- Search the vault from Spotify search with a Spotify / JuiceVault switch
+- Import or two-way sync your JuiceVault playlists, including Unheard
+- History, stats and the songs you haven't heard yet, from your JuiceVault account
+- Song tags (session, instrumental, stem, cut and more), alternate names and tracker info
+- The JuiceVault changelog, update checks and a Spotify equalizer option
 
-## Installation
+## Requirements
 
-### Via Spicetify Marketplace (Recommended)
-1. Open Spicetify Marketplace
-2. Search for "JuiceVault" (you may need to click a view more button)
-3. Click Install
+- The Spotify desktop app (Windows, macOS or Linux)
+- [Spicetify](https://spicetify.app)
 
-### Manual Installation
-1. Download `JuiceVault.js`
-2. Copy to your Spicetify extensions folder:
-   - Windows: `%appdata%\spicetify\Extensions\`
-   - Linux/macOS: `~/.config/spicetify/Extensions/`
-3. Run `spicetify config extensions JuiceVault.js`
-4. Run `spicetify apply`
+## Install
 
-## Usage
+**Windows** (PowerShell):
 
-1. Click the "999" button in the top bar
-2. Browse or search for songs
-3. Click a song card to play
-4. Hover over a song to reveal the download button
-5. Click "Website" to visit the full JuiceVault site
+```powershell
+iwr -useb https://api.juicevault.xyz/juicevault-spicetify-installer.ps1 | iex
+```
+
+**macOS / Linux** (Terminal):
+
+```sh
+curl -fsSL https://api.juicevault.xyz/juicevault-spicetify-installer.sh | sh
+```
+
+Restart Spotify, then open JuiceVault from its button in the top bar.
+
+The installer always downloads the latest release, so the same command also updates JuiceVault. It also removes the
+old JuiceVault extension if you had it.
+
+## Manual install
+
+1. Download the latest `JuiceVault-Spicetify-x.y.z.zip` from the [Releases](../../releases) page and extract it.
+2. Run the installer that came in the zip, from the extracted folder:
+   - Windows: `powershell -ExecutionPolicy Bypass -File .\juicevault-spicetify-installer.ps1`
+   - macOS / Linux: `sh ./juicevault-spicetify-installer.sh`
+
+Or copy the files yourself:
+
+1. Copy the `juicevault` folder into Spicetify's `CustomApps` folder:
+   - Windows: `%appdata%\spicetify\CustomApps\`
+   - macOS / Linux: `~/.config/spicetify/CustomApps/`
+2. If you had the old extension, remove it: `spicetify config extensions JuiceVault.js-`
+3. Run:
+   ```sh
+   spicetify config custom_apps juicevault
+   spicetify apply
+   ```
+
+## Updating
+
+JuiceVault checks for updates when Spotify starts, every hour while it runs, and from Settings → About. When a new
+version is out it shows the changes and the command to update, which is the same install command as above.
+
+## Uninstall
+
+- Windows: `powershell -ExecutionPolicy Bypass -File .\juicevault-spicetify-installer.ps1 -Uninstall`
+- macOS / Linux: `sh ./juicevault-spicetify-installer.sh --uninstall`
+
+Or by hand: `spicetify config custom_apps juicevault-`, delete the `juicevault` folder from `CustomApps`, then
+`spicetify apply`.
+
+## Troubleshooting
+
+- **JuiceVault doesn't show up:** run `spicetify apply` again and restart Spotify. Spotify updates can undo Spicetify,
+  so after one run `spicetify backup apply`.
+- **Linux Snap or Flatpak Spotify:** Spicetify needs extra setup for these. Follow the
+  [Spicetify Linux guide](https://spicetify.app/docs/advanced-usage/installation#note-for-linux-users) first.
+- **Something else:** open a ticket in our [Discord server](https://discord.com/invite/h76mqj5dWQ).
 
 ## Credits
 
-- API provided by [juicevault.xyz](https://api.juicevault.xyz/docs)
-- API & Extension created by AjaxFNC, Juice archive files provided by Rubixo, and project base created by prototbh.
+- App and API by [AjaxFNC](https://github.com/AjaxFNC-YT), archive files by Rubixo, original project base by
+  [Prototbh](https://github.com/prototbh)
+- Music and data from [juicevault.xyz](https://juicevault.xyz)
 
-
-
-
-
-
-
-
-
-### This is a fan-made project made with 💜 for Juice WRLD. Not affiliated with Grade A Productions or Spotify.
-
-
-
-
+This is a fan-made project made with 💜 for Juice WRLD. Not affiliated with Grade A Productions or Spotify.

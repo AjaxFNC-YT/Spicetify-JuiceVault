@@ -2,6 +2,7 @@
 set -e
 
 API="https://api.juicevault.xyz"
+CHANNEL="${JV_CHANNEL:-stable}"
 APP="juicevault"
 ZIP=""
 UNINSTALL=0
@@ -55,7 +56,7 @@ else
 	command -v curl >/dev/null || fail "curl is needed. Install it with your package manager and try again."
 	command -v unzip >/dev/null || fail "unzip is needed. Install it with your package manager and try again."
 	say "Downloading the latest JuiceVault release..."
-	INFO="$(curl -fsSL "$API/misc/spicetify/versions")"
+	INFO="$(curl -fsSL "$API/misc/spicetify/versions?channel=$CHANNEL")"
 	URL="$(printf '%s' "$INFO" | tr ',' '\n' | grep '"downloadUrl"' | head -n 1 | sed 's/.*"downloadUrl"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')"
 	[ -z "$URL" ] && fail "No JuiceVault release is available yet."
 	curl -fsSL "$API$URL" -o "$WORK/JuiceVault.zip"

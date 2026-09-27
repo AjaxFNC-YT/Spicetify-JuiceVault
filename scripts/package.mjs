@@ -22,14 +22,14 @@ for (const file of ["index.js", "extension.js"]) {
 	copyFileSync(join(built, file), join(stage, "juicevault", file));
 }
 copyFileSync(resolve(root, "customapp", "manifest.json"), join(stage, "juicevault", "manifest.json"));
-copyFileSync(resolve(root, "install.ps1"), join(stage, "install.ps1"));
-writeFileSync(join(stage, "install.sh"), readFileSync(resolve(root, "install.sh"), "utf8").replace(/\r\n/g, "\n"), { mode: 0o755 });
+copyFileSync(resolve(root, "juicevault-spicetify-installer.ps1"), join(stage, "juicevault-spicetify-installer.ps1"));
+writeFileSync(join(stage, "juicevault-spicetify-installer.sh"), readFileSync(resolve(root, "juicevault-spicetify-installer.sh"), "utf8").replace(/\r\n/g, "\n"), { mode: 0o755 });
 
 if (process.platform === "win32") {
 	const tar = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
-	execFileSync(tar, ["-a", "-c", "-f", zip, "-C", stage, "juicevault", "install.ps1", "install.sh"], { stdio: "inherit" });
+	execFileSync(tar, ["-a", "-c", "-f", zip, "-C", stage, "juicevault", "juicevault-spicetify-installer.ps1", "juicevault-spicetify-installer.sh"], { stdio: "inherit" });
 } else {
-	execFileSync("zip", ["-r", "-q", zip, "juicevault", "install.ps1", "install.sh"], { cwd: stage, stdio: "inherit" });
+	execFileSync("zip", ["-r", "-q", zip, "juicevault", "juicevault-spicetify-installer.ps1", "juicevault-spicetify-installer.sh"], { cwd: stage, stdio: "inherit" });
 }
 rmSync(stage, { recursive: true, force: true });
 

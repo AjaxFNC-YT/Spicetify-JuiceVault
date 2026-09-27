@@ -14,7 +14,7 @@ import { forgetMetadata, getMetadata } from "./core/api/songs";
 import { Catalog } from "./core/catalog/catalog";
 import { Session } from "./core/auth/session";
 import { updateProfile, changePassword, listeningStats, listeningActivity, type ProfilePatch } from "./core/api/account";
-import { getDeviceSettings, setDeviceSettings } from "./core/settings/device";
+import { getDeviceSettings, onDeviceSettings, setDeviceSettings, type DeviceSettings } from "./core/settings/device";
 import { logListen, getHistory, communityLeaderboard } from "./core/api/history";
 import { cachedUnheardIds, forgetUnheardRequest, getPlaylist, UNHEARD_ID } from "./core/api/playlists";
 import { Scrobbler } from "./playback/Scrobbler";
@@ -24,13 +24,13 @@ import { registerTrackMenu } from "./integration/TrackMenu";
 import { registerNativeTags } from "./integration/NativeTags";
 import { applyCuration, curationTargets } from "./integration/curation";
 import { knownAlbum, onAlbums, requestAlbums } from "./core/catalog/albums";
-import { onDeviceSettings } from "./core/settings/device";
 import { SongInfo } from "./ui/modals/SongInfo";
 import { openModal } from "./ui/modal";
 import { h } from "./ui/h";
 import { SearchInjector } from "./integration/SearchInjector";
 import { Announcements } from "./integration/Announcements";
 import { Updates, type UpdateStatus } from "./integration/Updates";
+import { SettingsSync } from "./integration/SettingsSync";
 import { linkUrl, unlink, type Connection } from "./core/api/connections";
 import { openInBrowser } from "./core/auth/oauth";
 
@@ -116,6 +116,7 @@ async function main(): Promise<void> {
 	const searchInjector = new SearchInjector();
 	const announcements = new Announcements();
 	const updates = new Updates();
+	const settingsSync = new SettingsSync(session);
 	let unregisterSyncMenu: () => void = () => {};
 	let unregisterTrackMenu: () => void = () => {};
 	let unregisterNativeTags: () => void = () => {};
@@ -370,7 +371,8 @@ async function main(): Promise<void> {
 		},
 		device: {
 			get: getDeviceSettings,
-			set: setDeviceSettings,
+			set: (patch: Partial<DeviceSettings>) => setDeviceSettings(patch),
+			on: (handler: (settings: DeviceSettings) => void) => onDeviceSettings(({ settings }) => handler(settings)),
 		},
 		search: (query: string, limit?: number) => catalog.searchSongs(query, limit),
 		reloadCatalog: () => catalog.load(true),
@@ -438,6 +440,7 @@ async function main(): Promise<void> {
 			searchInjector.dispose();
 			announcements.dispose();
 			updates.dispose();
+			settingsSync.dispose();
 			for (const stop of disposers) stop();
 			equalizer.dispose();
 			interceptor.dispose();
@@ -453,6 +456,7 @@ async function main(): Promise<void> {
 
 	guard("search", () => searchInjector.start(), undefined);
 	guard("updates", () => updates.start(), undefined);
+	guard("settings sync", () => settingsSync.start(), undefined);
 	guard("announcements", () => announcements.start(), undefined);
 	unregisterSyncMenu = guard("playlist menu", () => registerSyncMenu(playlistSync, session), () => {});
 	unregisterTrackMenu = guard("track menu", () => registerTrackMenu(catalog, api.showSongInfo), () => {});

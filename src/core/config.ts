@@ -10,14 +10,14 @@ export interface DevConfig {
 	sampleSongId: string;
 }
 
-export interface GithubConfig {
-	repo: string;
-	branch: string;
+export interface InstallerConfig {
+	windows: string;
+	unix: string;
 }
 
 export interface AppConfig {
 	api: ApiConfig;
-	github: GithubConfig;
+	installer: InstallerConfig;
 	discordUrl: string;
 	siteUrl: string;
 	debug: boolean;
@@ -26,17 +26,12 @@ export interface AppConfig {
 
 export const config: AppConfig = raw as AppConfig;
 
-export function repoUrl(path = ""): string {
-	return `https://github.com/${config.github.repo}${path}`;
-}
-
 export function isWindows(): boolean {
 	return /windows/i.test(navigator.userAgent);
 }
 
 export function installCommand(): string {
-	const base = `https://raw.githubusercontent.com/${config.github.repo}/${config.github.branch}`;
-	return isWindows() ? `iwr -useb ${base}/install.ps1 | iex` : `curl -fsSL ${base}/install.sh | sh`;
+	return isWindows() ? `iwr -useb ${assetUrl(config.installer.windows)} | iex` : `curl -fsSL ${assetUrl(config.installer.unix)} | sh`;
 }
 
 export function streamUrl(songId: string): string {

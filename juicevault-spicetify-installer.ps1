@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 $Api = "https://api.juicevault.xyz"
+$Channel = if ($env:JV_CHANNEL) { $env:JV_CHANNEL } else { "stable" }
 $AppName = "juicevault"
 
 function Say([string]$Text, [string]$Color = "Gray") {
@@ -61,7 +62,7 @@ try {
 		$Source = Join-Path $PSScriptRoot $AppName
 	} else {
 		Say "Downloading the latest JuiceVault release..."
-		$latest = (Invoke-RestMethod "$Api/misc/spicetify/versions").data.current
+		$latest = (Invoke-RestMethod "$Api/misc/spicetify/versions?channel=$Channel").data.current
 		if (-not $latest -or -not $latest.downloadUrl) { throw "No JuiceVault release is available yet." }
 		$download = Join-Path $Work "JuiceVault.zip"
 		Invoke-WebRequest "$Api$($latest.downloadUrl)" -OutFile $download

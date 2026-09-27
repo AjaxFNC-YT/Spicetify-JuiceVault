@@ -48,6 +48,14 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 	const [savingProfile, setSavingProfile] = useState(false);
 	const [prefs, setPrefs] = useState<Record<string, unknown>>(profile.preferences ?? {});
 	const [device, setDevice] = useState(jv?.device.get() ?? getDeviceSettings());
+
+	useEffect(() => {
+		if (!jv) return;
+		return jv.device.on((next) => {
+			setDevice(next);
+			setCustomAlbum(next.customAlbum);
+		});
+	}, [jv]);
 	const [customAlbum, setCustomAlbum] = useState(device.customAlbum);
 	const [update, setUpdate] = useState(jv?.updates.status() ?? null);
 
