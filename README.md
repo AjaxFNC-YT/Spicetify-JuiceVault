@@ -1,57 +1,22 @@
-# Juice Vault                                          
-- ⭐ MAKE SURE TO STAR THE PROJECT IF YOU ENJOY!
+# JuiceVault (old extension)
 
-A Spicetify extension that lets you stream and download unreleased Juice WRLD tracks directly in Spotify.
+This extension has been replaced by **JuiceVault for Spotify 2.0**, which adds the Juice WRLD vault to Spotify natively.
+The old version no longer works. If you still have it installed, it shows a popup with these steps.
 
-![Juice Vault](preview.png)
+## Install JuiceVault for Spotify 2.0
 
-## Features
+**Windows** (PowerShell):
 
-- 🎵 **1,400+ Unreleased Songs** - Access a massive vault of unreleased Juice WRLD tracks
-- 🔍 **Search** - Find songs instantly with real-time search
-- ▶️ **Integrated Player** - Play vault songs without leaving Spotify
-- ⬇️ **Download** - Download any song directly to your device
-- 🔊 **Volume Sync** - Volume syncs with Spotify's volume controls
-- 🎨 **Modern UI** - Beautiful gradient-styled player with Spotify-like aesthetics
+```powershell
+iwr -useb https://api.juicevault.xyz/juicevault-spicetify-installer.ps1 | iex
+```
 
-## Installation
+**macOS / Linux** (Terminal):
 
-### Via Spicetify Marketplace (Recommended)
-1. Open Spicetify Marketplace
-2. Search for "JuiceVault" (you may need to click a view more button)
-3. Click Install
+```sh
+curl -fsSL https://api.juicevault.xyz/juicevault-spicetify-installer.sh | sh
+```
 
-### Manual Installation
-1. Download `JuiceVault.js`
-2. Copy to your Spicetify extensions folder:
-   - Windows: `%appdata%\spicetify\Extensions\`
-   - Linux/macOS: `~/.config/spicetify/Extensions/`
-3. Run `spicetify config extensions JuiceVault.js`
-4. Run `spicetify apply`
+Restart Spotify, then open JuiceVault from its button in the top bar. The installer also removes this old extension.
 
-## Usage
-
-1. Click the "999" button in the top bar
-2. Browse or search for songs
-3. Click a song card to play
-4. Hover over a song to reveal the download button
-5. Click "Website" to visit the full JuiceVault site
-
-## Credits
-
-- API provided by [juicevault.xyz](https://api.juicevault.xyz/docs)
-- API & Extension created by AjaxFNC, Juice archive files provided by Rubixo, and project base created by prototbh.
-
-
-
-
-
-
-
-
-
-### This is a fan-made project made with 💜 for Juice WRLD. Not affiliated with Grade A Productions or Spotify.
-
-
-
-
+Need help? Ask in our [Discord server](https://discord.com/invite/h76mqj5dWQ).

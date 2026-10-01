@@ -1,9 +1,9 @@
 {
     "name": "JuiceVault",
-    "description": "Stream and download unreleased Juice WRLD music directly in Spotify. Access 1.4k+ vault songs with an integrated player, search, and download functionality.",
+    "description": "This extension has been replaced by JuiceVault for Spotify 2.0. Installing it shows you how to get the new version.",
     "preview": "preview.png",
     "main": "JuiceVault.js",
-    "version": "1.2.0",
+    "version": "2.0.0",
     "readme": "README.md",
     "authors": [
         {
@@ -27,8 +27,4 @@
         "vault",
         "emo rap"
     ]
-
 }
-
-
-
