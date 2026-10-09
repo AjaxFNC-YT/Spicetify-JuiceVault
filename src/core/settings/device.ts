@@ -35,6 +35,7 @@ export interface DeviceSettings {
 	smartReleased: boolean;
 	smartSameEra: boolean;
 	smartAmount: SmartAmount;
+	lyricsButton: boolean;
 }
 
 const DEFAULTS: DeviceSettings = {
@@ -63,6 +64,7 @@ const DEFAULTS: DeviceSettings = {
 	smartReleased: true,
 	smartSameEra: true,
 	smartAmount: "some",
+	lyricsButton: true,
 };
 
 export interface DeviceSettingsChange {

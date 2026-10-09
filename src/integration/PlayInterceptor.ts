@@ -108,28 +108,30 @@ function jvItem(song: QueueSong, uid: string): any {
 
 async function spotifyItems(uris: string[]): Promise<Map<string, any>> {
 	const found = new Map<string, any>();
-	const ids = uris.map((uri) => uri.split(":")[2]).filter(Boolean);
-	if (!ids.length) return found;
+	const tracks = uris.filter((uri) => uri.startsWith("spotify:track:"));
+	const query = Spicetify.GraphQL?.Definitions?.decorateContextTracks;
+	if (!tracks.length || !query) return found;
 	try {
-		const response = await Spicetify.CosmosAsync.get(`https://api.spotify.com/v1/tracks?ids=${ids.join(",")}`);
-		for (const track of response?.tracks ?? []) {
-			if (!track?.uri) continue;
-			const images = (track.album?.images ?? []).map((image: any) => ({ url: image.url, label: "standard" }));
-			found.set(track.uri, {
+		const response = await Spicetify.GraphQL.Request(query, { uris: tracks });
+		(response?.data?.tracks ?? []).forEach((track: any, index: number) => {
+			const uri = track?.uri ?? tracks[index];
+			if (!uri || track?.__typename !== "Track") return;
+			const images = (track.albumOfTrack?.coverArt?.sources ?? []).map((image: any) => ({ url: image.url, label: "standard" }));
+			found.set(uri, {
 				type: "track",
-				uri: track.uri,
-				name: track.name,
+				uri,
+				name: track.name ?? "",
 				mediaType: "audio",
-				duration: { milliseconds: track.duration_ms },
-				album: { type: "album", uri: track.album?.uri, name: track.album?.name, images },
-				artists: (track.artists ?? []).map((artist: any) => ({ type: "artist", uri: artist.uri, name: artist.name })),
+				duration: { milliseconds: Number(track.duration?.totalMilliseconds ?? 0) },
+				album: { type: "album", uri: track.albumOfTrack?.uri, name: track.albumOfTrack?.name ?? "", images },
+				artists: (track.artists?.items ?? []).map((artist: any) => ({ type: "artist", uri: artist.uri, name: artist.profile?.name ?? "" })),
 				isLocal: false,
-				isExplicit: Boolean(track.explicit),
+				isExplicit: track.contentRating?.label === "EXPLICIT",
 				hasAssociatedVideo: false,
 				metadata: {},
 				images,
 			});
-		}
+		});
 	} catch (error) {
 		log.debug("could not look up queued Spotify tracks", error);
 	}
@@ -375,11 +377,13 @@ export class PlayInterceptor {
 			this.suppress();
 			if (!this.ownsQueue) return this.originals.get("skipToNext")?.(...args);
 			this.syncCursor();
+			const fromSpotify = this.queue.isEmpty;
 			const item = this.queue.next();
 			if (!item) {
 				if (this.resumeSpotify) return this.handBackToSpotify();
 				return this.originals.get("skipToNext")?.(...args);
 			}
+			if (fromSpotify && isJvUri(item.uri) && !this.arbiter.isClaimed) this.resumeSpotify = true;
 			void this.playQueueItem(item);
 			return Promise.resolve();
 		});
@@ -515,7 +519,7 @@ export class PlayInterceptor {
 	private vaultRecommendations(count: number): any[] {
 		if (!count) return [];
 		const settings = getDeviceSettings();
-		const kinds = new Set(["main"]);
+		const kinds = new Set(["main", "freestyle"]);
 		if (settings.smartSessions) kinds.add("session");
 		if (settings.smartStems) kinds.add("stem");
 		if (settings.smartReleased) kinds.add("released");
@@ -853,7 +857,7 @@ export class PlayInterceptor {
 
 	private adoptFromState(state: any): void {
 		if (this.arbiter.isClaimed) return;
-		if (this.loosePlay && state?.item?.uri === this.loosePlay) return;
+		if (this.loosePlay && (state?.item?.uri === this.loosePlay || state?.context?.uri === this.loosePlay)) return;
 
 		const contextUri = state?.context?.uri;
 		if (typeof contextUri !== "string") return;
@@ -1203,7 +1207,7 @@ export class PlayInterceptor {
 		try {
 			if (item.provider === "queue" || item.recommended || !this.contextUri) {
 				this.loosePlay = item.uri;
-				await this.original?.(item.uri, {}, {});
+				await this.original?.({ uri: item.uri }, {}, {});
 			} else {
 				this.loosePlay = null;
 				await this.original?.({ uri: this.contextUri }, {}, { skipTo: { uid: item.uid, uri: item.uri } });

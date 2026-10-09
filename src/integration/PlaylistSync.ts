@@ -1,4 +1,5 @@
 import { createLogger } from "../core/log";
+import { loadImage } from "../core/image";
 import { Emitter, type Unsubscribe } from "../core/emitter";
 import { assetUrl, coverUrl } from "../core/config";
 import type { Session } from "../core/auth/session";
@@ -95,18 +96,6 @@ function chunks<T>(list: T[], size: number): T[][] {
 	const out: T[][] = [];
 	for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
 	return out;
-}
-
-async function loadImage(url: string): Promise<HTMLImageElement | null> {
-	try {
-		const image = new Image();
-		image.crossOrigin = "anonymous";
-		image.src = url;
-		await image.decode();
-		return image.naturalWidth ? image : null;
-	} catch {
-		return null;
-	}
 }
 
 function drawSquare(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, size: number): void {

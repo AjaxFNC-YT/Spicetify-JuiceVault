@@ -24,6 +24,8 @@ const CATEGORY_PATHS: Record<SongCategory, string> = {
 	stem: "/music/stems/list",
 	released: "/music/released/list",
 	cut: "/music/cuts/list",
+	acapella: "/music/acapellas/list",
+	freestyle: "/music/freestyles/list",
 };
 
 const metadataCache = new Map<string, SongMetadata>();

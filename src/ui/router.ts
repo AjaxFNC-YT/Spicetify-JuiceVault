@@ -2,9 +2,9 @@ import { useEffect, useState } from "./h";
 
 declare const Spicetify: any;
 
-export type View = "browse" | "playlists" | "profile" | "settings" | "login" | "history" | "stats" | "unheard" | "changelog";
+export type View = "browse" | "playlists" | "profile" | "settings" | "login" | "history" | "stats" | "unheard" | "changelog" | "lyrics";
 
-const VIEWS: View[] = ["browse", "playlists", "profile", "settings", "login", "history", "stats", "unheard", "changelog"];
+const VIEWS: View[] = ["browse", "playlists", "profile", "settings", "login", "history", "stats", "unheard", "changelog", "lyrics"];
 const BASE = "/juicevault";
 
 function readView(): View {

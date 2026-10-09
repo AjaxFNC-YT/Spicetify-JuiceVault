@@ -8,7 +8,9 @@ export interface JvTrackUriParts {
 }
 
 function encodeSegment(value: string): string {
-	return encodeURIComponent(value).replace(/%20/g, "+");
+	return encodeURIComponent(value)
+		.replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
+		.replace(/%20/g, "+");
 }
 
 function decodeSegment(value: string): string {

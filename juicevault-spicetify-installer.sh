@@ -32,7 +32,7 @@ for legacy in JuiceVault.js juicevault.js; do
 		say "Removed the old JuiceVault extension from Spicetify"
 	fi
 done
-rm -f "$ROOT/Extensions/JuiceVault.js"
+rm -f "$ROOT/Extensions/JuiceVault.js" "$ROOT/Extensions/juicevault.js"
 
 if [ "$UNINSTALL" = 1 ]; then
 	has_entry custom_apps "$APP" && "$SPICETIFY" config custom_apps "$APP-" >/dev/null

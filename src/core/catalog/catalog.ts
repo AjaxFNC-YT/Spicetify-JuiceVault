@@ -9,7 +9,7 @@ import { Emitter } from "../emitter";
 const log = createLogger("catalog");
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-const CATEGORIES: SongCategory[] = ["main", "instrumental", "remaster", "stem", "released", "cut"];
+const CATEGORIES: SongCategory[] = ["main", "instrumental", "remaster", "stem", "released", "cut", "acapella", "freestyle"];
 
 export class Catalog {
 	readonly events = new Emitter<{ updated: number }>();

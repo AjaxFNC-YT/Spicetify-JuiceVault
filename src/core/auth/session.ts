@@ -6,6 +6,7 @@ import { captchaOf, clearTokens, loadTokens, saveTokens, type Tokens } from "./t
 
 const log = createLogger("session");
 const REFRESH_MARGIN_MS = 60_000;
+const PROFILE_RETRY_MS = [3000, 10_000, 30_000, 60_000];
 
 export interface ListeningSummary {
 	totalListens?: number;
@@ -60,6 +61,8 @@ export class Session {
 	private profile: Profile | null = null;
 	private pending: Profile | null = null;
 	private refreshing: Promise<Tokens | null> | null = null;
+	private profileRetry: number | null = null;
+	private profileAttempts = 0;
 
 	get isSignedIn(): boolean {
 		return Boolean(this.tokens) && !this.pending;
@@ -131,6 +134,7 @@ export class Session {
 		this.requireVerified();
 		log.info("signed in as", profile.username);
 		this.events.emit("signedIn", profile);
+		this.events.emit("profile", profile);
 		return profile;
 	}
 
@@ -177,7 +181,11 @@ export class Session {
 				log.debug("refreshed access token");
 				return this.tokens;
 			} catch (error) {
-				log.warn("refresh failed; signing out", error);
+				if (!(error instanceof ApiError) || ![400, 401, 403].includes(error.status)) {
+					log.warn("could not refresh the login right now; staying signed in", error);
+					return null;
+				}
+				log.warn("JuiceVault rejected the saved login; signing out", error);
 				this.tokens = null;
 				this.profile = null;
 				this.pending = null;
@@ -253,8 +261,21 @@ export class Session {
 			return this.profile;
 		} catch (error) {
 			log.debug("could not load profile", error);
+			this.retryProfile();
 			return null;
 		}
+	}
+
+	private retryProfile(): void {
+		if (this.profileRetry !== null || !this.tokens || this.profile) return;
+		const delay = PROFILE_RETRY_MS[Math.min(this.profileAttempts, PROFILE_RETRY_MS.length - 1)]!;
+		this.profileAttempts += 1;
+		this.profileRetry = window.setTimeout(() => {
+			this.profileRetry = null;
+			void this.loadProfile().then((profile) => {
+				if (profile) this.profileAttempts = 0;
+			});
+		}, delay);
 	}
 
 	async checkVerification(): Promise<boolean> {

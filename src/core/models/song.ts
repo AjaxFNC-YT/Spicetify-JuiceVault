@@ -1,7 +1,7 @@
 import { getDeviceSettings } from "../settings/device";
 import { assetUrl, coverUrl } from "../config";
 
-export type SongCategory = "main" | "instrumental" | "remaster" | "stem" | "released" | "cut";
+export type SongCategory = "main" | "instrumental" | "remaster" | "stem" | "released" | "cut" | "acapella" | "freestyle";
 
 export type SongKind = SongCategory | "session";
 
@@ -12,6 +12,8 @@ const TAGS: Partial<Record<SongKind, string>> = {
 	stem: "stem",
 	released: "released",
 	cut: "cut",
+	acapella: "acapella",
+	freestyle: "freestyle",
 };
 
 const CUT_MARKER = /\s*[[({]\s*cut\s*[\])}]\s*$/i;

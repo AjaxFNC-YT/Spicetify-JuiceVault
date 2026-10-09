@@ -1,4 +1,5 @@
 import { assetUrl, config, coverUrl } from "./core/config";
+import { loadImage } from "./core/image";
 import { createLogger } from "./core/log";
 import { ShadowPlayer, type ShadowTrack } from "./playback/ShadowPlayer";
 import { Arbiter } from "./playback/Arbiter";
@@ -31,6 +32,10 @@ import { SearchInjector } from "./integration/SearchInjector";
 import { Announcements } from "./integration/Announcements";
 import { Updates, type UpdateStatus } from "./integration/Updates";
 import { SettingsSync } from "./integration/SettingsSync";
+import { removeLegacyExtension } from "./integration/LegacyCleanup";
+import { registerLyricsButton } from "./integration/LyricsButton";
+import { getLyrics } from "./core/api/lyrics";
+import { installLyricsBridge, lyricsScope, nativeLyricsComponent, standInUri } from "./integration/NativeLyrics";
 import { linkUrl, unlink, type Connection } from "./core/api/connections";
 import { openInBrowser } from "./core/auth/oauth";
 
@@ -121,6 +126,7 @@ async function main(): Promise<void> {
 	let unregisterSyncMenu: () => void = () => {};
 	let unregisterTrackMenu: () => void = () => {};
 	let unregisterNativeTags: () => void = () => {};
+	let unregisterLyricsButton: () => void = () => {};
 	const player = new ShadowPlayer();
 	const scrobbler = new Scrobbler(
 		player,
@@ -157,10 +163,8 @@ async function main(): Promise<void> {
 
 	const streamAllowsWebAudio = async (): Promise<boolean> => {
 		try {
-			const image = new Image();
-			image.crossOrigin = "anonymous";
-			image.src = `${coverUrl(config.dev.sampleSongId)}?cors-check=${Date.now()}`;
-			await image.decode();
+			const image = await loadImage(`${coverUrl(config.dev.sampleSongId)}?cors-check=${Date.now()}`);
+			if (!image) return false;
 			const canvas = document.createElement("canvas");
 			canvas.width = 1;
 			canvas.height = 1;
@@ -383,6 +387,10 @@ async function main(): Promise<void> {
 			await Spicetify.Platform.PlaylistAPI.add(playlistUri, [uri], { before: "end" });
 			return uri;
 		},
+		lyrics: (songId: string) => getLyrics(songId),
+		nativeLyrics: { component: () => nativeLyricsComponent(), standIn: (songId: string, cover: string | null) => standInUri(songId, cover),
+			scope: (anchor: Element, playingUri: string, standIn: string) => lyricsScope(anchor, playingUri, standIn),
+		},
 		showSongInfo: (songId: string) => openModal("Song info", h(SongInfo, { songId, song: catalog.get(songId) ?? null }), true),
 		updates: {
 			status: () => updates.status,
@@ -439,6 +447,7 @@ async function main(): Promise<void> {
 			unregisterSyncMenu();
 			unregisterTrackMenu();
 			unregisterNativeTags();
+			unregisterLyricsButton();
 			searchInjector.dispose();
 			announcements.dispose();
 			updates.dispose();
@@ -458,11 +467,15 @@ async function main(): Promise<void> {
 
 	guard("search", () => searchInjector.start(), undefined);
 	guard("updates", () => updates.start(), undefined);
+	guard("legacy cleanup", () => removeLegacyExtension(), undefined);
 	guard("settings sync", () => settingsSync.start(), undefined);
 	guard("announcements", () => announcements.start(), undefined);
 	unregisterSyncMenu = guard("playlist menu", () => registerSyncMenu(playlistSync, session), () => {});
 	unregisterTrackMenu = guard("track menu", () => registerTrackMenu(catalog, api.showSongInfo), () => {});
 	interceptor.setVaultSource(() => catalog.all());
+	const stopLyricsBridge = guard("lyrics bridge", () => installLyricsBridge(), () => undefined);
+	disposers.push(stopLyricsBridge);
+	unregisterLyricsButton = guard("lyrics button", () => registerLyricsButton(), () => {});
 	unregisterNativeTags = guard("native tags", () => registerNativeTags(catalog), () => {});
 	if (session.isSignedIn) guard("playlist sync", () => playlistSync.start(), undefined);
 

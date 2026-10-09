@@ -7,6 +7,7 @@ import type { Connection } from "../core/api/connections";
 import type { DeviceSettings } from "../core/settings/device";
 import type { SyncApi } from "../integration/PlaylistSync";
 import type { CurationTarget } from "../integration/curation";
+import type { Lyrics } from "../core/api/lyrics";
 import type { UpdateStatus } from "../integration/Updates";
 
 export interface JuiceVaultApi {
@@ -54,7 +55,15 @@ export interface JuiceVaultApi {
 		set(patch: Partial<DeviceSettings>): DeviceSettings;
 		on(handler: (settings: DeviceSettings) => void): () => void;
 	};
-	player: { current: { songId: string } | null; isPlaying: boolean };
+	player: { current: { songId: string } | null; isPlaying: boolean; position: number; duration: number };
+	lyrics(songId: string): Promise<Lyrics | null>;
+	nativeLyrics: {
+		component(): any | null;
+		standIn(songId: string, cover: string | null): string;
+		scope(anchor: Element, playingUri: string, standIn: string): { type: any; value: any } | null;
+	};
+	isJvUri(uri: unknown): boolean;
+	parseSongId(uri: string): string | null;
 	playList(songs: Song[], index: number, contextName?: string): void;
 	playlists(): Promise<Array<{ uri: string; name: string }>>;
 	addToPlaylist(playlistUri: string, songId: string): Promise<string>;

@@ -19,6 +19,8 @@ const CATEGORIES: Array<{ id: Filter; label: string; hideKey?: string }> = [
 	{ id: "remaster", label: "Remasters", hideKey: "hideRemasters" },
 	{ id: "instrumental", label: "Instrumentals", hideKey: "hideInstrumentals" },
 	{ id: "stem", label: "Stems", hideKey: "hideStems" },
+	{ id: "freestyle", label: "Freestyles" },
+	{ id: "acapella", label: "Acapellas" },
 ];
 
 const PAGE_SIZE = 60;

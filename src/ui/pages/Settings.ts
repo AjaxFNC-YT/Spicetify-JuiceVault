@@ -383,7 +383,7 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 				"Show song tags",
 				Toggle(device.showTags, (value) => updateDevice({ showTags: value })),
 				undefined,
-				"Labels like SESSION, INST, STEM and CUT next to songs on JuiceVault pages.",
+				"Labels like SESSION, INST, STEM, FREESTYLE and CUT next to songs on JuiceVault pages.",
 			),
 			Row(
 				"Show song tags in Spotify lists",
@@ -408,6 +408,12 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 				Toggle(device.hideCutMarker, (value) => updateDevice({ hideCutMarker: value })),
 				undefined,
 				"Cut Files still get the CUT tag. Changing this reloads the song list.",
+			),
+			Row(
+				"Lyrics button",
+				Toggle(device.lyricsButton, (value) => updateDevice({ lyricsButton: value })),
+				undefined,
+				"Shows a lyrics button in the player when a JuiceVault song has lyrics. Lyrics are in beta and may not be right.",
 			),
 			Row(
 				"Automatically show changelog",

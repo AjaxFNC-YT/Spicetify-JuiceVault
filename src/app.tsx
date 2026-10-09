@@ -5,6 +5,7 @@ import { injectStyle } from "./ui/styles";
 import { AccountButton } from "./ui/components/AccountButton";
 import { SectionNav } from "./ui/components/SectionNav";
 import { Changelog } from "./ui/pages/Changelog";
+import { Lyrics } from "./ui/pages/Lyrics";
 import { Browse } from "./ui/pages/Browse";
 import { Login } from "./ui/pages/Login";
 import { Profile } from "./ui/pages/Profile";
@@ -30,13 +31,14 @@ function App(): any {
 	else if (view === "stats") page = profile ? h(Stats, { jv, profile }) : h(Login, { jv, reason: "Log in to see your listening stats." });
 	else if (view === "unheard") page = profile ? h(Unheard, { jv }) : h(Login, { jv, reason: "Log in to see the songs you haven't heard yet." });
 	else if (view === "changelog") page = h(Changelog, { jv });
+	else if (view === "lyrics") page = h(Lyrics, { jv });
 	else if (view === "settings") page = profile ? h(Settings, { jv, profile }) : h(Login, { jv, reason: "Log in to change your settings." });
 	else page = h(Browse, { jv, profile });
 
 	return h(
 		"div",
 		{ className: "jv-root" },
-		view === "login"
+		view === "login" || view === "lyrics"
 			? null
 			: h(
 					"div",
