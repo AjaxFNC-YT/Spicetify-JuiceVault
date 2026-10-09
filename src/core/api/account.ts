@@ -29,6 +29,11 @@ export interface ListeningStats {
 	topSongs: TopSongEntry[];
 }
 
+export async function profileBadges(session: Session, username: string): Promise<unknown[]> {
+	const result = await session.authed<{ success: boolean; data?: { badges?: unknown } }>(`/user/profile/${encodeURIComponent(username)}`, { retries: 1 });
+	return Array.isArray(result?.data?.badges) ? result.data.badges : [];
+}
+
 export async function updateProfile(session: Session, patch: ProfilePatch): Promise<Profile> {
 	const current = session.user;
 	const body: ProfilePatch = { ...patch };

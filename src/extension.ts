@@ -14,7 +14,7 @@ import { Playability } from "./integration/Playability";
 import { forgetMetadata, getMetadata } from "./core/api/songs";
 import { Catalog } from "./core/catalog/catalog";
 import { Session } from "./core/auth/session";
-import { updateProfile, changePassword, listeningStats, listeningActivity, type ProfilePatch } from "./core/api/account";
+import { updateProfile, changePassword, listeningStats, listeningActivity, profileBadges, type ProfilePatch } from "./core/api/account";
 import { getDeviceSettings, onDeviceSettings, setDeviceSettings, type DeviceSettings } from "./core/settings/device";
 import { logListen, getHistory, communityLeaderboard } from "./core/api/history";
 import { cachedUnheardIds, forgetUnheardRequest, getPlaylist, UNHEARD_ID } from "./core/api/playlists";
@@ -373,6 +373,7 @@ async function main(): Promise<void> {
 			changePassword: (current: string, next: string) => changePassword(session, current, next),
 			stats: () => listeningStats(session),
 			activity: () => listeningActivity(session),
+			badges: (username: string) => profileBadges(session, username),
 		},
 		device: {
 			get: getDeviceSettings,

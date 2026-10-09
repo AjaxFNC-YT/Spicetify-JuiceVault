@@ -48,6 +48,21 @@ function Stat(value: string, label: string, progress?: number): any {
 
 export function Profile({ jv, profile }: { jv: JuiceVaultApi | null; profile: ProfileData }): any {
 	const [stats, setStats] = useState<ListeningStats | null>(null);
+	const [badges, setBadges] = useState<unknown>(profile.badges);
+
+	useEffect(() => {
+		if (!jv || (Array.isArray(profile.badges) && profile.badges.length)) return setBadges(profile.badges);
+		let cancelled = false;
+		jv.account
+			.badges(profile.username)
+			.then((list) => {
+				if (!cancelled) setBadges(list);
+			})
+			.catch(() => undefined);
+		return () => {
+			cancelled = true;
+		};
+	}, [jv, profile.username, profile.badges]);
 	const [activity, setActivity] = useState<ListeningActivity | null>(null);
 	const [expanded, setExpanded] = useState(false);
 	const nowPlaying = useNowPlaying();
@@ -111,7 +126,7 @@ export function Profile({ jv, profile }: { jv: JuiceVaultApi | null; profile: Pr
 				{ className: "jv-headtext" },
 				h("p", { className: "jv-eyebrow" }, "Profile"),
 				h("h1", null, name),
-				h(Badges, { badges: profile.badges }),
+				h(Badges, { badges }),
 				h("p", { className: "jv-sub" }, facts.join(" • ")),
 			),
 		),

@@ -49,6 +49,7 @@ export interface JuiceVaultApi {
 		changePassword(current: string, next: string): Promise<void>;
 		stats(): Promise<ListeningStats | null>;
 		activity(): Promise<ListeningActivity | null>;
+		badges(username: string): Promise<unknown[]>;
 	};
 	device: {
 		get(): DeviceSettings;
