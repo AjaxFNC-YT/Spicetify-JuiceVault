@@ -91,6 +91,10 @@ const CSS = `
 .jv-info-grid dd { margin: 0; font-size: .85rem; line-height: 1.45; color: #fff; white-space: pre-line; overflow-wrap: anywhere; }
 .jv-tag[data-colored="true"][data-kind="acapella"], .jv-native-tag[data-colored="true"][data-kind="acapella"] { background: rgba(236,72,153,.22); color: #f9a8d4; }
 .jv-tag[data-colored="true"][data-kind="freestyle"], .jv-native-tag[data-colored="true"][data-kind="freestyle"] { background: rgba(249,115,22,.22); color: #fdba74; }
+.jv-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: -4px 0 14px; }
+.jv-badge { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; cursor: default; transition: transform .15s ease; }
+.jv-badge svg { width: 26px; height: 26px; }
+.jv-badge:hover { transform: scale(1.15); }
 .jv-more { display: block; margin: 28px auto 0; height: 40px; padding: 0 28px; border-radius: 500px; border: 1px solid rgba(255,255,255,.22);
   background: transparent; color: #fff; font-weight: 700; font-size: .8rem; cursor: pointer; }
 .jv-more:hover { border-color: #fff; transform: scale(1.02); }

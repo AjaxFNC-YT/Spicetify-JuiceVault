@@ -8,6 +8,7 @@ import { useNowPlaying, usePlaylists } from "../hooks";
 import { navigate } from "../router";
 import { Avatar, Button } from "../components/controls";
 import { TrackHeader, TrackRow } from "../components/TrackRow";
+import { Badges } from "../components/Badges";
 
 const TOP_PREVIEW = 10;
 
@@ -110,6 +111,7 @@ export function Profile({ jv, profile }: { jv: JuiceVaultApi | null; profile: Pr
 				{ className: "jv-headtext" },
 				h("p", { className: "jv-eyebrow" }, "Profile"),
 				h("h1", null, name),
+				h(Badges, { badges: profile.badges }),
 				h("p", { className: "jv-sub" }, facts.join(" • ")),
 			),
 		),

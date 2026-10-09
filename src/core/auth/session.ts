@@ -31,6 +31,7 @@ export interface Profile {
 	stats?: { likedCount?: number; playlistCount?: number };
 	listening?: ListeningSummary;
 	createdAt?: string;
+	badges?: unknown;
 	[key: string]: unknown;
 }
 
