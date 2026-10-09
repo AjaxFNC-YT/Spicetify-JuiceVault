@@ -304,6 +304,7 @@ const CSS = `
 .jv-mi-button:disabled { opacity: .5; }
 .jv-mi-icon { display: flex; flex: 0 0 auto; color: rgba(255,255,255,.7); }
 .jv-mi-caret { display: flex; margin-left: auto; color: rgba(255,255,255,.7); }
+.jv-mi-check { display: flex; margin-left: auto; color: var(--spice-button-active, #1ed760); }
 .jv-menu-label { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jv-mi-search { position: relative; display: flex; align-items: center; margin: 4px 4px 8px; }
 .jv-mi-search svg { position: absolute; left: 10px; color: rgba(255,255,255,.7); pointer-events: none; }

@@ -1,6 +1,7 @@
-import { h, native, useEffect, useState } from "../h";
+import { h, useEffect, useState } from "../h";
 import { Icon } from "../icons";
 import { navigate, type View } from "../router";
+import { MenuButton } from "./StandaloneMenu";
 
 const GAP = 8;
 
@@ -66,30 +67,20 @@ export function SectionNav({ view, signedIn, unseenChangelog }: { view: View; si
 			dot(section),
 		);
 
-	const RC = native();
-	const overflow =
-		hidden.length && RC.ContextMenu
-			? h(
-					RC.ContextMenu,
-					{
-						key: "more",
-						trigger: "click",
-						action: "toggle",
-						menu: h(
-							RC.Menu,
-							null,
-							hidden.map((section) => h(RC.MenuItem, { key: section.view, onClick: () => go(section.view, view) }, section.label)),
-						),
-					},
-					h(
+	const overflow = hidden.length
+		? h(MenuButton, {
+				key: "more",
+				align: "left",
+				items: hidden.map((section) => ({ key: section.view, label: section.label, checked: section.view === view, onClick: () => go(section.view, view) })),
+				trigger: h(
 						"button",
 						{ className: "jv-nav-pill jv-nav-more", "data-active": String(Boolean(hiddenActive)) },
 						hiddenActive?.label ?? "More",
 						Icon("chevron-down", 12),
 						hidden.some((section) => section.view === "changelog") ? dot({ view: "changelog" }) : null,
 					),
-				)
-			: null;
+			})
+		: null;
 
 	return h(
 		"nav",

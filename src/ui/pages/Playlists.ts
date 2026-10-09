@@ -2,7 +2,7 @@ import type { JvPlaylist } from "../../core/api/playlists";
 import { describeError } from "../../core/http/errors";
 import { isLikedUri, type Destination, type PlaylistLink } from "../../integration/PlaylistSync";
 import type { JuiceVaultApi } from "../bridge";
-import { h, native, notify, useCallback, useEffect, useState } from "../h";
+import { h, notify, useCallback, useEffect, useState } from "../h";
 import { Icon } from "../icons";
 import { Button } from "../components/controls";
 import { PlaylistCover } from "../components/PlaylistCover";
@@ -10,6 +10,7 @@ import { openModal } from "../modal";
 import { ConfirmUnheardSync } from "../modals/ConfirmUnheardSync";
 import { DestinationPicker } from "../modals/DestinationPicker";
 import type { PickerMode } from "../modals/SourcePicker";
+import { MenuButton, type MenuSpec } from "../components/StandaloneMenu";
 
 declare const Spicetify: any;
 
@@ -132,36 +133,27 @@ export function Playlists({ jv }: { jv: JuiceVaultApi | null }): any {
 		);
 	};
 
-	const RC = native();
-
 	const rowFor = (playlist: JvPlaylist): any => {
 		const linked = links.filter((link) => link.jvId === playlist.id);
 		const pending = busy[playlist.id];
 		const failing = linked.find((link) => link.error);
 
-		const menu = h(
-			RC.Menu,
-			null,
-			h(RC.MenuItem, { key: "import", onClick: () => pick(playlist, "import") }, "Import…"),
-			playlist.kind === "unheard" && linked.length ? null : h(RC.MenuItem, { key: "sync", onClick: () => pick(playlist, "sync") }, linked.length ? "Sync with another playlist…" : "Sync…"),
-			...linked.map((link) =>
-				h(RC.MenuItem, { key: `open-${link.spotifyUri}`, onClick: () => open(link.spotifyUri) }, `Open “${nameOf(link)}”`),
-			),
-			...linked.map((link) =>
-				h(
-					RC.MenuItem,
-					{
-						key: `unlink-${link.spotifyUri}`,
-						onClick: () => {
-							jv?.sync.unlink(link.spotifyUri);
-							refreshLinks();
-							notify(`“${nameOf(link)}” will no longer sync`);
-						},
-					},
-					`Stop syncing “${nameOf(link)}”`,
-				),
-			),
-		);
+		const menu: MenuSpec[] = [
+			{ key: "import", label: "Import…", onClick: () => pick(playlist, "import") },
+			...(playlist.kind === "unheard" && linked.length
+				? []
+				: [{ key: "sync", label: linked.length ? "Sync with another playlist…" : "Sync…", onClick: () => pick(playlist, "sync") }]),
+			...linked.map((link) => ({ key: `open-${link.spotifyUri}`, label: `Open “${nameOf(link)}”`, onClick: () => open(link.spotifyUri) })),
+			...linked.map((link) => ({
+				key: `unlink-${link.spotifyUri}`,
+				label: `Stop syncing “${nameOf(link)}”`,
+				onClick: () => {
+					jv?.sync.unlink(link.spotifyUri);
+					refreshLinks();
+					notify(`“${nameOf(link)}” will no longer sync`);
+				},
+			})),
+		];
 
 		const status = failing
 			? h("p", { className: "jv-pl-status jv-pl-status--error" }, h("span", { className: "jv-pl-dot" }), failing.error)
@@ -196,11 +188,7 @@ export function Playlists({ jv }: { jv: JuiceVaultApi | null }): any {
 				{ className: "jv-pl-actions" },
 				linked.length || pending ? null : Button("secondary", "Import", { onClick: () => pick(playlist, "import") }),
 				primary,
-				h(
-					RC.ContextMenu,
-					{ menu, trigger: "click", action: "toggle" },
-					h("button", { className: "jv-icon", title: "More options" }, Icon("more", 20)),
-				),
+				h(MenuButton, { items: menu, trigger: h("button", { className: "jv-icon", title: "More options" }, Icon("more", 20)) }),
 			),
 		);
 	};

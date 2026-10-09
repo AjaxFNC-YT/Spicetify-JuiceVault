@@ -4,7 +4,7 @@ import { siteUrl, config } from "../../core/config";
 import { describeError } from "../../core/http/errors";
 import { DEFAULT_TRIM_DB, getDeviceSettings, type AlbumMode, type SmartAmount } from "../../core/settings/device";
 import type { JuiceVaultApi } from "../bridge";
-import { h, native, notify, useEffect, useState } from "../h";
+import { h, notify, useEffect, useState } from "../h";
 import { Icon } from "../icons";
 import { openModal } from "../modal";
 import { navigate } from "../router";
@@ -13,6 +13,7 @@ import { ChangePassword } from "../modals/ChangePassword";
 import { RemoveJvSongs } from "../modals/RemoveJvSongs";
 import { GoogleMark } from "../components/brand";
 import type { Connection } from "../../core/api/connections";
+import { MenuButton } from "../components/StandaloneMenu";
 
 const LIBRARY: Array<{ key: string; label: string }> = [
 	{ key: "hideSessions", label: "Studio sessions" },
@@ -158,41 +159,17 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 		navigate("browse", true);
 	};
 
-	const RC = native();
 	const formatDb = (db: number): string => (db === 0 ? "0 dB" : `${db > 0 ? "+" : ""}${db} dB`);
 	const albumLabel = ALBUM_MODES.find((mode) => mode.id === device.albumMode)?.label ?? "JuiceVault";
-	const albumMenu = h(
-		RC.Menu,
-		null,
-		ALBUM_MODES.map((mode) =>
-			h(
-				RC.MenuItem,
-				{
-					key: mode.id,
-					onClick: () => updateDevice({ albumMode: mode.id }),
-					trailingIcon: device.albumMode === mode.id ? Icon("check", 16) : undefined,
-				},
-				mode.label,
-			),
-		),
-	);
+	const albumMenu = ALBUM_MODES.map((mode) => ({ key: mode.id, label: mode.label, checked: device.albumMode === mode.id, onClick: () => updateDevice({ albumMode: mode.id }) }));
 
 	const amountLabel = SMART_AMOUNTS.find((amount) => amount.id === device.smartAmount)?.label ?? "Some";
-	const amountMenu = h(
-		RC.Menu,
-		null,
-		SMART_AMOUNTS.map((amount) =>
-			h(
-				RC.MenuItem,
-				{
-					key: amount.id,
-					onClick: () => updateDevice({ smartAmount: amount.id }),
-					trailingIcon: device.smartAmount === amount.id ? Icon("check", 16) : undefined,
-				},
-				amount.label,
-			),
-		),
-	);
+	const amountMenu = SMART_AMOUNTS.map((amount) => ({
+		key: amount.id,
+		label: amount.label,
+		checked: device.smartAmount === amount.id,
+		onClick: () => updateDevice({ smartAmount: amount.id }),
+	}));
 	const smartOn = device.smartShuffle;
 	const vaultOn = smartOn && device.smartVault;
 
@@ -345,11 +322,7 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 			),
 			Row(
 				"How many",
-				h(
-					RC.ContextMenu,
-					{ menu: amountMenu, trigger: "click", action: "toggle" },
-					h("button", { className: "jv-select", disabled: !smartOn }, amountLabel, Icon("chevron-down", 16)),
-				),
+				h(MenuButton, { items: amountMenu, trigger: h("button", { className: "jv-select", disabled: !smartOn }, amountLabel, Icon("chevron-down", 16)) }),
 				undefined,
 				"Roughly 15%, 30% or 50% extra songs on top of the playlist.",
 			),
@@ -359,7 +332,7 @@ export function Settings({ jv, profile }: { jv: JuiceVaultApi | null; profile: P
 			null,
 			Row(
 				"Album shown for JuiceVault songs",
-				h(RC.ContextMenu, { menu: albumMenu, trigger: "click", action: "toggle" }, h("button", { className: "jv-select" }, albumLabel, Icon("chevron-down", 16))),
+				h(MenuButton, { items: albumMenu, trigger: h("button", { className: "jv-select" }, albumLabel, Icon("chevron-down", 16)) }),
 				undefined,
 				"Used in the player, queue and track lists. The real album is shown when JuiceVault knows it.",
 			),

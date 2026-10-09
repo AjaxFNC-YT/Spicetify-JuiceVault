@@ -12,6 +12,7 @@ export interface MenuSpec {
 	dividerAfter?: boolean;
 	pinned?: boolean;
 	searchable?: string;
+	checked?: boolean;
 	children?: MenuSpec[];
 }
 
@@ -113,6 +114,7 @@ function MenuList({
 				spec.icon ? h("span", { className: "jv-mi-icon" }, Icon(spec.icon, 16)) : null,
 				h("span", { className: "jv-menu-label" }, spec.label),
 				hasChildren ? h("span", { className: "jv-mi-caret" }, Icon("chevron", 16)) : null,
+				spec.checked ? h("span", { className: "jv-mi-check" }, Icon("check", 16)) : null,
 			),
 		);
 	};
@@ -189,4 +191,22 @@ export function StandaloneMenu({ items, position, onClose }: { items: MenuSpec[]
 
 	if (!position) return null;
 	return Spicetify.ReactDOM.createPortal(h(MenuList, { items, position, onClose, depth: 0 }), overlayLayer());
+}
+
+export function MenuButton({ items, trigger, align = "right" }: { items: MenuSpec[]; trigger: any; align?: "left" | "right" }): any {
+	const [position, setPosition] = useState<MenuPosition | null>(null);
+
+	const toggle = (event: any): void => {
+		event.stopPropagation();
+		if (position) return setPosition(null);
+		const rect = event.currentTarget.getBoundingClientRect();
+		setPosition({ x: align === "right" ? rect.right - MENU_WIDTH : rect.left, y: rect.bottom + 6 });
+	};
+
+	return h(
+		Spicetify.React.Fragment,
+		null,
+		Spicetify.React.cloneElement(trigger, { onClick: toggle, "data-jv-menu-trigger": "true", "aria-expanded": Boolean(position) }),
+		h(StandaloneMenu, { items, position, onClose: () => setPosition(null) }),
+	);
 }

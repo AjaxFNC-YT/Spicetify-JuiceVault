@@ -2,11 +2,12 @@ import { songKind, type Song, type SongKind } from "../../core/models/song";
 import type { Profile } from "../../core/auth/session";
 import { LOGO } from "../../assets/logo";
 import type { JuiceVaultApi } from "../bridge";
-import { h, native, useCallback, useEffect, useMemo, useState } from "../h";
+import { h, useCallback, useEffect, useMemo, useState } from "../h";
 import { useNowPlaying, usePlaylists } from "../hooks";
 import { useQueryParam } from "../router";
 import { Icon } from "../icons";
 import { TrackHeader, TrackRow } from "../components/TrackRow";
+import { MenuButton } from "../components/StandaloneMenu";
 
 type Filter = SongKind | "all";
 
@@ -99,22 +100,7 @@ export function Browse({ jv, profile }: { jv: JuiceVaultApi | null; profile: Pro
 		[jv, filtered, query, label],
 	);
 
-	const RC = native();
-	const filterMenu = h(
-		RC.Menu,
-		null,
-		options.map((entry) =>
-			h(
-				RC.MenuItem,
-				{
-					key: entry.id,
-					onClick: () => setCategory(entry.id),
-					trailingIcon: category === entry.id ? Icon("check", 16) : undefined,
-				},
-				entry.label,
-			),
-		),
-	);
+	const filterItems = options.map((entry) => ({ key: entry.id, label: entry.label, checked: category === entry.id, onClick: () => setCategory(entry.id) }));
 
 	return h(
 		"div",
@@ -166,11 +152,7 @@ export function Browse({ jv, profile }: { jv: JuiceVaultApi | null; profile: Pro
 					},
 				}),
 			),
-			h(
-				RC.ContextMenu,
-				{ trigger: "click", action: "toggle", menu: filterMenu },
-				h("button", { className: "jv-sort", title: "Filter" }, label, Icon("sort", 16)),
-			),
+			h(MenuButton, { items: filterItems, trigger: h("button", { className: "jv-sort", title: "Filter" }, label, Icon("sort", 16)) }),
 		),
 		shown.length
 			? h(

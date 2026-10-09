@@ -1,12 +1,11 @@
 import { alternateNames, songKind, songTag, type Song } from "../../core/models/song";
 import { albumName, getDeviceSettings } from "../../core/settings/device";
 import { api } from "../bridge";
-import { h, native, notify, useEffect, useState } from "../h";
+import { h, notify, useEffect, useState } from "../h";
 import { Icon } from "../icons";
 import { StandaloneMenu, type MenuPosition, type MenuSpec } from "./StandaloneMenu";
 import { AddToPlaylistPanel } from "./AddToPlaylistPanel";
 import { uriForSong } from "../../integration/uri";
-import { NativeFallback, nativeMenusAvailable } from "../nativeScope";
 
 declare const Spicetify: any;
 
@@ -58,6 +57,15 @@ function menuSpec(song: Song, playlists: Array<{ uri: string; name: string }>, o
 	return [
 		add,
 		{
+			key: "queue",
+			label: "Add to queue",
+			icon: "queue",
+			onClick: () =>
+				void run(async () => {
+					await Spicetify.Platform.PlayerAPI.addToQueue([{ uri: uriForSong(song), uid: null }]);
+				}, "Couldn't add this to the queue"),
+		},
+		{
 			key: "like",
 			label: "Save to your Liked Songs",
 			icon: "heart",
@@ -86,29 +94,6 @@ function menuSpec(song: Song, playlists: Array<{ uri: string; name: string }>, o
 	];
 }
 
-function nativeMenu(items: MenuSpec[]): any {
-	const RC = native();
-	const render = (spec: MenuSpec): any =>
-		spec.children
-			? h(
-					RC.MenuSubMenuItem,
-					{ key: spec.key, displayText: spec.label, leadingIcon: spec.icon ? Icon(spec.icon, 16) : undefined },
-					spec.children.map(render),
-				)
-			: h(
-					RC.MenuItem,
-					{
-						key: spec.key,
-						onClick: spec.onClick,
-						disabled: spec.disabled,
-						leadingIcon: spec.icon ? Icon(spec.icon, 16) : undefined,
-						divider: spec.dividerAfter ? "after" : undefined,
-					},
-					spec.label,
-				);
-	return h(RC.Menu, null, items.map(render));
-}
-
 function useAlbum(song: Song): string | null {
 	const [album, setAlbum] = useState<string | null>(() => song.album ?? api()?.albums.get(song.id) ?? null);
 
@@ -129,14 +114,12 @@ function useAlbum(song: Song): string | null {
 }
 
 export function TrackRow(props: TrackRowProps): any {
-	if (!props.standaloneMenu || !nativeMenusAvailable()) return h(Row, props);
-	return h(NativeFallback(), { fallback: () => h(Row, props) }, h(Row, { ...props, standaloneMenu: false }));
+	return h(Row, { ...props, standaloneMenu: true });
 }
 
 function Row({ song, position, playing, onPlay, playlists, detail, standaloneMenu }: TrackRowProps): any {
 	const [menuAt, setMenuAt] = useState<MenuPosition | null>(null);
 	const [panelAt, setPanelAt] = useState<MenuPosition | null>(null);
-	const RC = native();
 	const album = useAlbum(song);
 	const known = api()?.catalog.get(song.id) ?? song;
 	const display = getDeviceSettings();
@@ -144,7 +127,6 @@ function Row({ song, position, playing, onPlay, playlists, detail, standaloneMen
 	const others = display.showAltNames ? alternateNames(known, song.title) : [];
 	const kind = songKind(known);
 	const items = menuSpec(song, playlists, standaloneMenu ? () => setPanelAt(menuAt) : undefined);
-	const menu = !standaloneMenu && RC.TrackMenu ? h(RC.TrackMenu, { uri: uriForSong(song) }) : nativeMenu(items);
 
 	const dots = h(
 		"button",
@@ -200,21 +182,19 @@ function Row({ song, position, playing, onPlay, playlists, detail, standaloneMen
 			"div",
 			{ className: "jv-end" },
 			h("span", { className: "jv-time" }, song.length),
-			standaloneMenu ? dots : h(RC.ContextMenu, { menu, trigger: "click", action: "toggle" }, dots),
+			dots,
 		),
 	);
 
-	if (standaloneMenu) {
-		return h(
-			"div",
-			null,
-			row,
-			h(StandaloneMenu, { items, position: menuAt, onClose: () => setMenuAt(null) }),
-			h(AddToPlaylistPanel, { songId: song.id, position: panelAt, onClose: () => setPanelAt(null) }),
-		);
-	}
+	return h(
+		"div",
+		null,
+		row,
+		h(StandaloneMenu, { items, position: menuAt, onClose: () => setMenuAt(null) }),
+		h(AddToPlaylistPanel, { songId: song.id, position: panelAt, onClose: () => setPanelAt(null) }),
+	);
 
-	return h(RC.ContextMenu, { menu, trigger: "right-click" }, row);
+
 }
 
 export function TrackHeader(secondLabel = "Album"): any {

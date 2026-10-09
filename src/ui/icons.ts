@@ -21,6 +21,7 @@ const FALLBACK: Record<string, string> = {
 	chevron: "M6 3.5 10.5 8 6 12.5 5 11.5 8.5 8 5 4.5z",
 	fullscreen: "M1 1h5v1.5H2.5V6H1V1zm9 0h5v5h-1.5V2.5H10V1zM1 10h1.5v3.5H6V15H1v-5zm13.5 0H15v5h-5v-1.5h3.5V10z",
 	minimize: "M4.5 1H6v5H1V4.5h3.5V1zM10 1h1.5v3.5H15V6h-5V1zM1 10h5v5H4.5v-3.5H1V10zm9 0h5v1.5h-3.5V15H10v-5z",
+	queue: "M1 2h14v1.5H1V2zm0 4h14v1.5H1V6zm0 4h7v1.5H1V10zm11-1v3H9v1.5h3v3h1.5v-3h3V12h-3V9H12z",
 	info: "M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm7.25-3.5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.75h-1.5z",
 };
 
